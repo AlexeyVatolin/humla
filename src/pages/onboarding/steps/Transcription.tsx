@@ -3,8 +3,7 @@
 // The local-vs-cloud fork. TWO CARDS, not a provider list:
 //
 //   Card A — "On-device": private, free, offline. Model is chosen by the
-//     step-3 `language` setting (Norwegian → nb-whisper-large-q5, else
-//     large-v3-turbo-q5) and so is DERIVED, not stored. Whenever this card is
+//     step-3 `language` setting and so is DERIVED, not stored. Whenever this card is
 //     the selected one, an effect keeps transcribe_config.default in agreement
 //     with that derived model and fetches it — including when the user goes
 //     back and changes the language, which used to leave the card advertising
@@ -57,14 +56,13 @@ import { StepShell } from "../StepShell";
 import { Select } from "../../../components/ui/Select";
 
 // ---- Model routing (mirrors design/ONBOARDING.md § 4) ---------------------
-// Norwegian meetings get the National Library's NB Whisper; everything else
-// gets the multilingual turbo default. IDs match the backend registry
-// (src-tauri/src/local_whisper.rs).
 const NB_MODEL_ID = "nb-whisper-large-q5";
+const RU_MODEL_ID = "gigaam-v3-e2e-rnnt";
 const DEFAULT_MODEL_ID = "large-v3-turbo-q5";
 
 function modelIdForLanguage(language: string | null): string {
   const l = (language ?? "").toLowerCase();
+  if (l === "ru") return RU_MODEL_ID;
   return l === "no" || l === "nb" || l === "nn" ? NB_MODEL_ID : DEFAULT_MODEL_ID;
 }
 
@@ -145,6 +143,7 @@ export function TranscriptionStep({ ctx }: { ctx: StepContext }) {
   const modelId = modelIdForLanguage(language);
   const chosenModel = models?.find((m) => m.id === modelId) ?? null;
   const isNorwegian = modelId === NB_MODEL_ID;
+  const isRussian = modelId === RU_MODEL_ID;
   const isIntel = arch !== null && arch !== "aarch64";
 
   // This step's slice of the global download state.
@@ -445,6 +444,11 @@ export function TranscriptionStep({ ctx }: { ctx: StepContext }) {
                   : "one-time"}{" "}
                 model.
               </p>
+              {isRussian && (
+                <p className="mt-1 text-xs leading-relaxed text-[var(--color-text-muted)]">
+                  GigaAM v3 E2E-RNN-T
+                </p>
+              )}
               {isNorwegian && (
                 <p className="mt-1 text-xs leading-relaxed text-[var(--color-text-muted)]">
                   Norwegian model — trained by the National Library of Norway.

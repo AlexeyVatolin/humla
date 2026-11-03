@@ -24,6 +24,7 @@ import type { StepContext } from "../types";
 
 const TURBO = "large-v3-turbo-q5";
 const NB = "nb-whisper-large-q5";
+const GIGAAM = "gigaam-v3-e2e-rnnt";
 
 function whisperModels(over: { turboDownloaded?: boolean } = {}): LocalWhisperModelStatus[] {
   return [
@@ -47,6 +48,18 @@ function whisperModels(over: { turboDownloaded?: boolean } = {}): LocalWhisperMo
       sizeBytesHint: 1_160_000_000,
       kind: "language_specific",
       specificLanguage: "no",
+      downloaded: false,
+      sizeBytes: null,
+      path: null,
+    },
+    {
+      id: GIGAAM,
+      label: "GigaAM v3 E2E-RNN-T",
+      description: "Russian speech recognition.",
+      filename: "gigaam-v3-e2e-rnnt-F16.gguf",
+      sizeBytesHint: 452381408,
+      kind: "language_specific",
+      specificLanguage: "ru",
       downloaded: false,
       sizeBytes: null,
       path: null,
@@ -135,13 +148,16 @@ describe("onboarding TranscriptionStep — layout", () => {
     ).not.toContainElement(badges[0]);
   });
 
-  it("routes Norwegian to the National Library model", async () => {
+  it.each([
+    ["no", NB, /national library of norway/i],
+    ["ru", GIGAAM, /GigaAM v3 E2E-RNN-T/],
+  ] as const)("downloads the recommended model for %s", async (language, modelId, label) => {
     const downloads: string[] = [];
     let written: TranscribeConfig | null = null;
     const dl = deferred<null>();
     renderStep({
       settings_get: (args) =>
-        (args as { key: string }).key === "language" ? "no" : null,
+        (args as { key: string }).key === "language" ? language : null,
       set_transcribe_config: (args) => {
         written = (args as { config: TranscribeConfig }).config;
         return null;
@@ -153,12 +169,12 @@ describe("onboarding TranscriptionStep — layout", () => {
     });
 
     expect(
-      await screen.findByText(/national library of norway/i),
+      await screen.findByText(label),
     ).toBeInTheDocument();
 
     await userEvent.click(await onDeviceCard());
-    await waitFor(() => expect(downloads).toEqual([NB]));
-    expect(written!.default).toMatchObject({ provider: "local", model_id: NB });
+    await waitFor(() => expect(downloads).toEqual([modelId]));
+    expect(written!.default).toMatchObject({ provider: "local", model_id: modelId, use_gpu: true });
 
     dl.resolve(null);
   });
@@ -226,14 +242,16 @@ describe("onboarding TranscriptionStep — on-device download flow", () => {
   // change the language left the card advertising NB Whisper while the stored
   // config still routed to the multilingual turbo model, with Continue enabled
   // and NB Whisper never downloaded. Same root cause as #147, but silent.
-  it("reconciles the stored config when the language changed after On-device was chosen", async () => {
+  it.each([
+    ["no", NB, /national library of norway/i],
+    ["ru", GIGAAM, /GigaAM v3 E2E-RNN-T/],
+  ] as const)("updates the model after switching the language to %s", async (language, modelId, label) => {
     const downloads: string[] = [];
     let written: TranscribeConfig | null = null;
     const dl = deferred<null>();
     renderStep({
-      // Language is now Norwegian…
       settings_get: (args) =>
-        (args as { key: string }).key === "language" ? "no" : null,
+        (args as { key: string }).key === "language" ? language : null,
       // …but the stored config is from the earlier English pass.
       get_transcribe_config: () => ({
         default: { provider: "local", model_id: TURBO, preset: "quality", use_gpu: true },
@@ -249,25 +267,23 @@ describe("onboarding TranscriptionStep — on-device download flow", () => {
       },
     });
 
-    // The card resumes as selected and advertises the Norwegian model...
     expect(
-      await screen.findByText(/national library of norway/i),
+      await screen.findByText(label),
     ).toBeInTheDocument();
 
     // ...so the stored config must agree, with no user interaction at all.
     await waitFor(() =>
-      expect(written!.default).toMatchObject({ provider: "local", model_id: NB }),
+      expect(written!.default).toMatchObject({ provider: "local", model_id: modelId }),
     );
     // Per-language overrides survive the reconciliation.
     expect(written!.per_language).toMatchObject({ fr: { provider: "deepgram" } });
     // And the model it now claims is actually being fetched.
-    await waitFor(() => expect(downloads).toEqual([NB]));
+    await waitFor(() => expect(downloads).toEqual([modelId]));
 
-    // The card's download state describes NB, not the turbo model it used to.
     expect(
       await screen.findByText(/you can continue while it finishes/i),
     ).toBeInTheDocument();
-    storeProgress(NB, 580_000_000, 1_160_000_000);
+    storeProgress(modelId, 100_000_000, 452_381_408);
     expect(await screen.findByText(/downloading/i)).toBeInTheDocument();
     // A stale progress event for the old model must not be adopted.
     storeProgress(TURBO, 574_000_000, 574_000_000);
