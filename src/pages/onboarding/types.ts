@@ -23,7 +23,6 @@ export const STEP_ORDER = [
   "language",
   "transcription",
   "summary",
-  "cloud",
   "done",
 ] as const;
 

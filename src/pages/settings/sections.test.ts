@@ -5,8 +5,8 @@ describe("resolveSectionId", () => {
   it("maps every legacy tab id to its new section", () => {
     expect(resolveSectionId("general")).toBe("general");
     expect(resolveSectionId("about")).toBe("general");
-    expect(resolveSectionId("account")).toBe("account");
-    expect(resolveSectionId("organization")).toBe("account");
+    expect(resolveSectionId("account")).toBe("recording");
+    expect(resolveSectionId("organization")).toBe("recording");
     expect(resolveSectionId("transcription")).toBe("transcription");
     expect(resolveSectionId("keys")).toBe("transcription");
     expect(resolveSectionId("summary")).toBe("summaries");

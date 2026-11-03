@@ -24,16 +24,7 @@ mod assets;
 mod chat;
 mod clients;
 mod copilot;
-// `pub(crate)` so `crate::menubar` can resolve the active workspace when it
-// creates a note for a headless recording.
-pub(crate) mod cloud;
-pub(crate) mod cloud_auth;
 mod export;
-// Live cloud-sync worker glue. Behind the `cloud` feature; `pub` so `run()` can
-// reach `cloud_worker::install`. Not a #[tauri::command] group, so no glob
-// re-export below.
-#[cfg(feature = "cloud")]
-pub mod cloud_worker;
 mod folders;
 mod local_llm;
 mod mcp;
@@ -44,7 +35,6 @@ mod permissions;
 mod settings;
 mod summary;
 mod summary_prompts;
-mod telemetry;
 mod title;
 mod transcription_config;
 mod webhook;
@@ -53,8 +43,6 @@ pub use assets::*;
 pub use chat::*;
 pub use clients::*;
 pub use copilot::*;
-pub use cloud::*;
-pub use cloud_auth::*;
 pub use export::*;
 pub use folders::*;
 pub use local_llm::*;
@@ -65,7 +53,6 @@ pub use notes::*;
 pub use permissions::*;
 pub use settings::*;
 pub use summary::*;
-pub use telemetry::*;
 pub use title::*;
 pub use summary_prompts::*;
 pub use transcription_config::*;
@@ -2643,23 +2630,6 @@ pub async fn recording_start(
         }
     }
 
-    // Shared-note recording lock. For a workspace note, claim it before we
-    // start capturing so two teammates can't record the same note at once —
-    // their transcripts would otherwise clobber each other under last-write-wins
-    // sync. Server-arbitrated via a unique index; Personal notes and an
-    // unreachable cloud return `Skipped` and record unlocked.
-    let claimed_lock_id = match cloud::claim_recording_lock(&app, &note_id).await {
-        cloud::LockClaim::Held(who) => {
-            let msg = format!(
-                "{who} is recording this note — only one person can record a shared note at a time."
-            );
-            emit_error(&app, Some(&note_id), &msg);
-            return Err(msg);
-        }
-        cloud::LockClaim::Granted(id) => Some(id),
-        cloud::LockClaim::Skipped => None,
-    };
-
     emit_status(&app, Some(&note_id), Phase::Starting);
 
     let temp_dir = std::env::temp_dir().join(format!("notes-app-{}", note_id));
@@ -2692,10 +2662,6 @@ pub async fn recording_start(
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
-            // Don't leak the lock we just claimed if the sidecar won't start.
-            if let Some(id) = &claimed_lock_id {
-                cloud::release_recording_lock(&app, id.clone()).await;
-            }
             // Back out of Phase::Starting. Every phase-driven surface latches
             // the last one it saw — the recording bar, and (since #21) the tray
             // icon and its Start/Stop items — so a start that gives up here
@@ -2807,7 +2773,7 @@ pub async fn recording_start(
         // through its drain (#182), so the stop state is what tells the two
         // apart.
         let state: tauri::State<AppState> = app_clone.state();
-        let (was_active, lock_id, lock_heartbeat) = {
+        let was_active = {
             let mut s = state.recording.lock();
             if s.note_id.as_deref() == Some(&note_id_clone)
                 && s.stop == crate::recording::StopState::None
@@ -2817,23 +2783,11 @@ pub async fn recording_start(
                 s.temp_dir = None;
                 s.reader = None;
                 s.inflight = Arc::new(parking_lot::Mutex::new(Vec::new()));
-                (true, s.lock_id.take(), s.lock_heartbeat.take())
+                true
             } else {
-                (false, None, None)
+                false
             }
         };
-        // Sidecar died without recording_stop — drop the lock so the note isn't
-        // pinned until the TTL lapses (the heartbeat would otherwise keep a dead
-        // recording's lock alive).
-        if let Some(hb) = lock_heartbeat {
-            hb.abort();
-        }
-        if let Some(id) = lock_id {
-            let app_rel = app_clone.clone();
-            tokio::spawn(async move {
-                cloud::release_recording_lock(&app_rel, id).await;
-            });
-        }
         if was_active {
             // Through `emit_status`, not a bare emit: the sidecar dying is still
             // a phase change, and the tray has to stop claiming a live capture.
@@ -2847,16 +2801,6 @@ pub async fn recording_start(
 
     state.recording.lock().reader = Some(reader_handle);
 
-    // Attach the shared-note lock to the live session + start its heartbeat so a
-    // long meeting keeps the lock fresh. Stored on the session so recording_stop
-    // and the crash-recovery path can abort the heartbeat and release the lock.
-    if let Some(id) = claimed_lock_id {
-        let hb = cloud::spawn_lock_heartbeat(app.clone(), id.clone());
-        let mut s = state.recording.lock();
-        s.lock_id = Some(id);
-        s.lock_heartbeat = Some(hb);
-    }
-
     emit_status(&app, Some(&note_id), Phase::Recording);
     Ok(())
 }
@@ -2867,7 +2811,7 @@ pub async fn recording_stop(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let stop_pressed = std::time::Instant::now();
-    let (child, note_id, temp_dir, inflight, reader, lock_id, lock_heartbeat, deferred) = {
+    let (child, note_id, temp_dir, inflight, reader, deferred) = {
         let mut s = state.recording.lock();
         // `note_id` deliberately stays set until the post-stop snapshot: it is
         // what lets a chunk finishing during the drain append to the note live
@@ -2882,27 +2826,12 @@ pub async fn recording_stop(
         // list to keep `s` self-consistent for the next session.
         let inflight = std::mem::replace(&mut s.inflight, Arc::new(parking_lot::Mutex::new(Vec::new())));
         let reader = s.reader.take();
-        let lock_id = s.lock_id.take();
-        let lock_heartbeat = s.lock_heartbeat.take();
         // Read here rather than off the post-stop snapshot: the phase this
         // stop emits next has to carry it, and the snapshot is taken after the
         // drain.
         let deferred = !s.sink.transcribes_on_arrival();
-        (child, note_id, temp_dir, inflight, reader, lock_id, lock_heartbeat, deferred)
+        (child, note_id, temp_dir, inflight, reader, deferred)
     };
-
-    // Stop heartbeating and release the shared-note lock immediately, so a
-    // teammate can record next without waiting out the TTL. Best-effort: a
-    // missed release just lets the lock expire on its own.
-    if let Some(hb) = lock_heartbeat {
-        hb.abort();
-    }
-    if let Some(id) = lock_id {
-        let app_release = app.clone();
-        tokio::spawn(async move {
-            cloud::release_recording_lock(&app_release, id).await;
-        });
-    }
 
     // Everything in flight at stop-pressed is the drain's denominator; the
     // reader may still push a last chunk or two before the sidecar closes its
@@ -3530,11 +3459,14 @@ async fn ensure_provider_ready(
         crate::stt::ProviderConfig::Local(local_cfg) => {
             let p = local_model_path(app, &language, &local_cfg.model_id)
                 .map_err(|e| e.to_string())?;
-            if p.exists() {
+            if local_cfg.model_id == crate::local_gigaam::MODEL_ID
+                && language != "ru" && language != "auto" {
+                Some("GigaAM supports Russian only. Select Russian as the note language.".into())
+            } else if p.exists() {
                 None
             } else {
                 Some(
-                    "Local Whisper model not downloaded. Download it in Settings → Transcription."
+                    "Local model not downloaded. Download it in Settings → Transcription."
                         .to_string(),
                 )
             }
@@ -4434,30 +4366,6 @@ async fn transcribe_takes(
     eprintln!("{}", timings.summary());
     write_replay_timings(app, note_id, &timings).await;
 
-    // Push the rewritten `timeline.jsonl` of every take this run touched.
-    //
-    // `session_changed_for_sync` above only enqueues the *metadata* record;
-    // the binary assets are a separate channel (see the per-session asset sync
-    // comment in `commands::cloud`), and for a finished recording the frontend
-    // fires it off the `recording_status` idle. This path deliberately never
-    // emits one — so without this, a teammate gets the note's text and never
-    // its speaker labels or word timings until repair-on-open happens to catch
-    // it. From the backend rather than the view, so no other caller of
-    // `transcribe_note` can skip it.
-    //
-    // Spawned: it waits for the sync worker to have pushed the records it
-    // needs, which can take longer than the user should watch a spinner for.
-    // A no-op for Personal notes.
-    #[cfg(feature = "cloud")]
-    {
-        let app = app.clone();
-        let note_id = note_id.to_string();
-        tauri::async_runtime::spawn(async move {
-            if let Err(e) = cloud::upload_note_sessions(&app, &note_id, false).await {
-                eprintln!("transcribe: session asset upload for {note_id}: {e}");
-            }
-        });
-    }
     // Only now, with everything the successful takes earned committed and
     // pushed, does a mid-run failure become the run's outcome.
     if let Some(msg) = fatal {

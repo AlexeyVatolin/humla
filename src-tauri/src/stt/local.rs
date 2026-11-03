@@ -38,8 +38,8 @@ impl BatchSttAdapter for LocalWhisperAdapter {
         "Local Whisper"
     }
 
-    fn supports_language(&self, _lang: &str) -> bool {
-        true
+    fn supports_language(&self, lang: &str) -> bool {
+        !crate::local_gigaam::is_model(&self.model_path) || lang == "ru" || lang == "auto"
     }
 
     fn supports_word_timestamps(&self, _model: &str) -> bool {

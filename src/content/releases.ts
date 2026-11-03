@@ -11,20 +11,6 @@ export type Release = {
 
 export const releases: Release[] = [
   {
-    version: "0.74.0",
-    date: "2026-11-01",
-    title: "Start a team workspace from a link",
-    summary: "Links on humla.team and in our emails now open Humla right where you create a team workspace.",
-    paragraphs: [
-      "When you click a link to start a team workspace, for example from humla.team or one of our emails, Humla now opens and goes straight to creating the workspace. That works whether Humla is already running or not. If you're still setting Humla up, it waits until you're done.",
-    ],
-    highlights: [
-      "Links can open Humla straight to Create team workspace.",
-      "Works whether Humla is open or not.",
-    ],
-    issues: [],
-  },
-  {
     version: "0.73.0",
     date: "2026-10-29",
     title: "Use any OpenAI-compatible API",
@@ -130,42 +116,6 @@ export const releases: Release[] = [
     issues: [],
   },
   {
-    version: "0.69.1",
-    date: "2026-10-18",
-    title: "Humla opens again",
-    summary: "Humla 0.69.0 closed right after opening if you use a team workspace. This fixes it.",
-    paragraphs: [
-      "If you use a team workspace, Humla 0.69.0 closed as soon as you opened it. That came from how the new sign-in code started up, and 0.69.1 fixes it. Two-factor authentication and everything else from 0.69.0 work as before.",
-      "A Mac on 0.69.0 can’t update itself, since it closes before it gets the chance. Download 0.69.1 from the releases page and install it over the old one. Your notes and settings stay where they are.",
-    ],
-    highlights: [
-      "Humla opens again for people in a team workspace.",
-    ],
-    issues: [],
-  },
-  {
-    version: "0.69.0",
-    date: "2026-10-18",
-    title: "Two-factor authentication",
-    summary: "Protect your Humla Cloud account with a code from your phone, and require it for a whole team.",
-    visual: "two-factor",
-    paragraphs: [
-      "You can now turn on two-factor authentication for your Humla Cloud account. Signing in then asks for a 6-digit code from an authenticator app, like 1Password, Google Authenticator, Apple Passwords or Authy, as well as your password. Turn it on under Settings → Account. You get ten recovery codes when you do. Keep them somewhere safe: each one gets you in once if you lose your phone.",
-      "Workspace owners and admins can require it of everyone in the workspace, from the workspace settings under Settings → Account, and see who already has it before they switch it on. Until a member sets it up, the workspace shows as locked in their switcher and nothing in it syncs to their Mac. Changes they made keep waiting, and sync once they have it.",
-      "Humla also stays signed in now. It used to sign in again with your password every time it started. Now it keeps your session in your Mac’s Keychain and renews it, so a restart doesn’t ask for a code. If a session does end, Humla asks you to sign in again.",
-    ],
-    highlights: [
-      "Turn on two-factor authentication under Settings → Account.",
-      "Sign in with a code from your authenticator app, or a recovery code.",
-      "Require two-factor authentication for a whole workspace.",
-      "See which members have it before you require it.",
-      "Humla stays signed in between restarts.",
-    ],
-    issues: [
-      { title: "Two-factor authentication in the app: sign-in code, setup, workspace requirement", reference: "#221", status: "Closed", url: "https://github.com/michaelwilhelmsen/humla/issues/221" },
-    ],
-  },
-  {
     version: "0.68.1",
     date: "2026-10-16",
     title: "Summaries with GPT-6",
@@ -197,22 +147,6 @@ export const releases: Release[] = [
     issues: [
       { title: "Export utility: transcript + summary to files (Markdown, txt)", reference: "#18", status: "Closed", url: "https://github.com/michaelwilhelmsen/humla/issues/18" },
     ],
-  },
-  {
-    version: "0.67.1",
-    date: "2026-10-16",
-    title: "Moving a note to another workspace",
-    summary: "Moving a note now takes you back to your list and tells you where it went.",
-    paragraphs: [
-      "When you moved the note you were reading to another workspace, Humla left you on it, even though it was no longer in the workspace you were in. Now you go back to the list you came from, and a short message says where the note went.",
-      "A moved note also leaves its folder and client behind, since those belong to the old workspace. Before, it kept them and ended up in no folder at all in the new workspace, not even under No folder. You can file it again once it's there.",
-    ],
-    highlights: [
-      "Moving a note to another workspace takes you back to your list.",
-      "A message says which workspace the note moved to.",
-      "A moved note drops its old folder and client, so you can file it again.",
-    ],
-    issues: [],
   },
   {
     version: "0.67.0",
@@ -374,42 +308,6 @@ export const releases: Release[] = [
       "Enjoy a cleaner, more consistent Settings panel.",
     ],
     issues: [],
-  },
-  {
-    version: "0.61.0",
-    issues: [],
-    date: "2026-09-15",
-    title: "Find the right note, faster",
-    summary: "A little more order for a growing library.",
-    visual: "filters",
-    paragraphs: [
-      "Your notes add up. Now you can narrow your library by what a note contains, which client it belongs to, and who created it — without remembering its title.",
-      "The filter bar is available in All notes and inside folders. Combine filters to find exactly what you need, then clear them to see the full picture again.",
-    ],
-    highlights: [
-      "Filter by notes, recordings, transcripts, or summaries.",
-      "Narrow by client or, in a team workspace, by author.",
-      "Find unfiled notes in All notes with the No folder filter.",
-    ],
-  },
-  {
-    version: "0.60.0",
-    issues: [
-      { title: "A note can be private inside a workspace", reference: "#191", status: "Closed", url: "https://github.com/michaelwilhelmsen/humla/issues/191" },
-    ],
-    date: "2026-09-14",
-    title: "A little space for private notes",
-    summary: "Keep a note to yourself, even in a team workspace.",
-    visual: "privacy",
-    paragraphs: [
-      "Some notes are just for you. You can now keep a note private inside a shared workspace, so personal thoughts and early drafts can live alongside your team’s work.",
-      "The note’s author controls its visibility. Notes that only one person can access also skip the shared recording lock, keeping personal recording sessions straightforward.",
-    ],
-    highlights: [
-      "Choose whether a workspace note is private or shared.",
-      "Only the author can change a note’s visibility.",
-      "Permanently deleting a note also removes its version history.",
-    ],
   },
   {
     version: "0.59.0",

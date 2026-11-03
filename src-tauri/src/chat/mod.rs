@@ -5,7 +5,6 @@
 //! `commands::chat`; everything here is Tauri-free so it's unit-testable.
 
 pub(crate) mod adapter;
-pub mod cloud;
 mod providers;
 mod tools;
 

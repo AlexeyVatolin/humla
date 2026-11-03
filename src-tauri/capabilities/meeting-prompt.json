@@ -1,0 +1,6 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "meeting-prompt",
+  "windows": ["meeting-prompt"],
+  "permissions": []
+}

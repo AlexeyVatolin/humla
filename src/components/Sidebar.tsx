@@ -1,5 +1,4 @@
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import {
   ChevronLeft,
   FileAudio,
@@ -13,18 +12,17 @@ import {
   Settings as SettingsIcon,
   Trash2,
 } from "lucide-react";
-import { open } from "@tauri-apps/plugin-dialog";
-import { useNotesStore } from "../lib/store";
-import { ipc, type Folder, type Note } from "../lib/ipc";
+import { useMemo, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "../lib/cn";
-import { ContextMenu, ContextMenuItem } from "./ContextMenu";
-import { Modal } from "../pages/settings/components/Modal";
-import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
-import { SetupNag } from "./SetupNag";
-import { ImportDialog } from "./ImportDialog";
-import { ChatConversations } from "./ChatConversations";
-import { useCloudStore } from "../lib/cloud";
+import { ipc, type Folder, type Note } from "../lib/ipc";
+import { useNotesStore } from "../lib/store";
 import { trafficLightSpacerCssPx, useZoomStore } from "../lib/zoom";
+import { Modal } from "../pages/settings/components/Modal";
+import { ChatConversations } from "./ChatConversations";
+import { ContextMenu, ContextMenuItem } from "./ContextMenu";
+import { ImportDialog } from "./ImportDialog";
+import { SetupNag } from "./SetupNag";
 
 // Humla mark sourced from humla-small.svg — single-path silhouette of
 // the bee's head + antennae arc. Uses currentColor so it inherits text
@@ -199,7 +197,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
         </button>
       </div>
 
-      <WorkspaceSwitcher />
+
 
       {/* .nd-bar owns height, side padding and radius — graphite's recipe names
           all three for a bar, and they differ from its nav rows. */}
@@ -341,7 +339,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
         active={location.pathname.startsWith("/settings")}
         title="⌘,"
       />
-      <AccountRow />
+
 
       {importPath && (
         <ImportDialog
@@ -647,31 +645,6 @@ function NoteRow({
       >
         <Trash2 size={14} strokeWidth={1.5} />
       </button>
-    </Link>
-  );
-}
-
-// Signed-in profile presence pinned at the bottom of the nav. Hidden when
-// signed out (the workspace switcher already offers a sign-in affordance).
-function AccountRow() {
-  const status = useCloudStore((s) => s.status);
-  if (!status.logged_in || !status.user) return null;
-  const u = status.user;
-  return (
-    <Link
-      to="/settings?tab=account"
-      className="no-drag flex items-center gap-2.5 mt-1 px-2 py-2 rounded-[var(--radius)] hover:bg-[var(--color-pill-hover)] transition-colors"
-      title="Account"
-    >
-      <span className="shrink-0 grid place-items-center w-6 h-6 rounded-full bg-[var(--color-surface-raised)] text-[11px] font-semibold text-[var(--color-text)]">
-        {(u.name || u.email).slice(0, 1).toUpperCase()}
-      </span>
-      <span className="flex-1 min-w-0 flex flex-col leading-tight">
-        <span className="truncate text-[13px] text-[var(--color-text)]">{u.name || u.email}</span>
-        {u.name && (
-          <span className="truncate text-[11px] text-[var(--color-text-disabled)]">{u.email}</span>
-        )}
-      </span>
     </Link>
   );
 }

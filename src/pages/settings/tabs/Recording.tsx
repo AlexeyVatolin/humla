@@ -88,6 +88,17 @@ export function RecordingSection({
 
       <Section title="Menu bar">
         <Row
+          label="Zoom meeting reminders"
+          description="Offer to record when Zoom starts using your microphone. Humla must be running."
+          control={
+            <Toggle
+              label="Zoom meeting reminders"
+              checked={s.zoom_meeting_prompt !== "false"}
+              onChange={(on) => update("zoom_meeting_prompt", on ? "true" : "false")}
+            />
+          }
+        />
+        <Row
           label="Open at login"
           description="Humla starts in the menu bar when you log in, without opening its window. If you added Humla to Login Items in System Settings, remove it there."
           control={<LaunchAtLoginField />}

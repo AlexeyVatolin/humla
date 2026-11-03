@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { ipc } from "./ipc";
+import { useEffect,useState } from "react";
 import { useCloudStore } from "./cloud";
-import type { SpeakerLabelStat, SpeakerSuggestionSource } from "./speakerSuggest";
+import { ipc } from "./ipc";
+import type { SpeakerLabelStat,SpeakerSuggestionSource } from "./speakerSuggest";
 
 /**
  * Fetch the rename picker's suggestion source (#116 part 1) — see
@@ -15,7 +15,7 @@ import type { SpeakerLabelStat, SpeakerSuggestionSource } from "./speakerSuggest
  */
 export function useSpeakerSuggestions(enabled: boolean): SpeakerSuggestionSource {
   const [stats, setStats] = useState<SpeakerLabelStat[]>([]);
-  const [roster, setRoster] = useState<string[]>([]);
+  const roster: string[] = [];
   // Your own name needs no network: some servers omit the caller from the
   // roster, and you are the person most likely to need labelling.
   const myName = useCloudStore((s) => s.status.user?.name?.trim());
@@ -25,10 +25,6 @@ export function useSpeakerSuggestions(enabled: boolean): SpeakerSuggestionSource
     let alive = true;
     void ipc.speakerLabelStats().then(
       (rows) => alive && setStats(rows),
-      () => {},
-    );
-    void ipc.speakerRoster().then(
-      (names) => alive && setRoster(names),
       () => {},
     );
     return () => {

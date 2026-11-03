@@ -210,6 +210,7 @@ impl ChatAdapter for OpenAiChatAdapter {
             ctx.model,
             &wire_messages,
             &wire_tools,
+            None,
             // Returning false breaks the SSE loop, so a stop lands mid-answer
             // and the partial that already streamed is what comes back (#80).
             |delta| {
@@ -253,6 +254,7 @@ impl ChatAdapter for OllamaChatAdapter {
                 ctx.model,
                 &wire_messages,
                 &wire_tools,
+                Some(ctx.think),
                 |delta| {
                     on_event(ChatStreamEvent::TextDelta(delta.to_string()));
                     !ctx.cancel.is_cancelled()
@@ -561,34 +563,38 @@ mod local_compat_tests {
 
     #[tokio::test]
     async fn local_chat_falls_back_to_openai_compat_off_ollamas_port() {
-        let (port, server) = serve_sse(vec![ONE_DELTA.into()]).await;
-        let base = format!("http://127.0.0.1:{port}/v1");
-        let cancel = CancelFlag::new();
-        let ctx = ChatCtx {
-            model: "mlx-community/Qwen3-8B",
-            api_key: None,
-            base_url: &base,
-            think: false,
-            cancel: &cancel,
-        };
-        let mut seen = String::new();
-        let step = OllamaChatAdapter
-            .step(
-                ctx,
-                &[ChatTurn::new("user", "hello")],
-                &[],
-                &mut |ev| {
-                    if let ChatStreamEvent::TextDelta(d) = ev {
-                        seen.push_str(&d);
-                    }
-                },
-            )
-            .await
-            .expect("a non-Ollama local server must still chat");
-        assert_eq!(step.text, "hi from mlx");
-        assert_eq!(seen, "hi from mlx");
-        let req = server.await.unwrap().remove(0);
-        assert!(req.starts_with("POST /v1/chat/completions"), "req was: {req}");
+        for think in [false, true] {
+            let (port, server) = serve_sse(vec![ONE_DELTA.into()]).await;
+            let base = format!("http://127.0.0.1:{port}/v1");
+            let cancel = CancelFlag::new();
+            let ctx = ChatCtx {
+                model: "gemma-4-E4B-it-MLX-4bit",
+                api_key: None,
+                base_url: &base,
+                think,
+                cancel: &cancel,
+            };
+            let mut seen = String::new();
+            let step = OllamaChatAdapter
+                .step(
+                    ctx,
+                    &[ChatTurn::new("user", "hello")],
+                    &[],
+                    &mut |ev| {
+                        if let ChatStreamEvent::TextDelta(d) = ev {
+                            seen.push_str(&d);
+                        }
+                    },
+                )
+                .await
+                .expect("a non-Ollama local server must still chat");
+            assert_eq!(step.text, "hi from mlx");
+            assert_eq!(seen, "hi from mlx");
+            let req = server.await.unwrap().remove(0);
+            assert!(req.starts_with("POST /v1/chat/completions"), "req was: {req}");
+            let body: Value = serde_json::from_str(req.split_once("\r\n\r\n").unwrap().1).unwrap();
+            assert_eq!(body["enable_thinking"], think);
+        }
     }
 
     #[tokio::test]

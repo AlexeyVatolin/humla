@@ -225,17 +225,13 @@ export type SettingsKey =
   // written through `recordHotkeySet`, never `setSetting`, because registering
   // it with the OS can fail and that has to be reported.
   | "close_to_tray"
+  | "zoom_meeting_prompt"
   | "record_hotkey"
   // Onboarding wizard (v0.31): completion flag + resume cursor. Both are
   // plain settings rows so the grandfathering migration and the frontend
   // takeover guard read the same source of truth.
   | "onboarding_completed"
-  | "onboarding_step"
-  // Anonymous onboarding counters. UNSET MEANS OFF — that is what grandfathers
-  // installs made before the feature existed (they were promised no telemetry and
-  // never see the wizard again). Written by the wizard footer, which is also the
-  // disclosure, so the user is always told before anything is sent.
-  | "telemetry_enabled";
+  | "onboarding_step";
 
 export type TranscribeProvider = Provider;
 
@@ -414,13 +410,6 @@ export const ipc = {
   deleteNote: (id: string) => invoke<void>("notes_delete", { id }),
   moveNote: (id: string, folderId: string | null) =>
     invoke<void>("notes_move", { id, folderId }),
-  // Reassign a note to a workspace ("" = Personal/local-only).
-  setNoteWorkspace: (id: string, workspaceId: string) =>
-    invoke<void>("notes_set_workspace", { id, workspaceId }),
-  // Visibility inside the workspace (#191). Also banks the choice as that
-  // workspace's default for the next note.
-  setNotePrivate: (id: string, isPrivate: boolean) =>
-    invoke<void>("notes_set_private", { id, private: isPrivate }),
   // When the note happened, epoch ms.
   setNoteDate: (id: string, createdAt: number) =>
     invoke<void>("notes_set_date", { id, createdAt }),
@@ -463,7 +452,6 @@ export const ipc = {
   /** Report one anonymous milestone. Fire-and-forget: the backend gates on the
    *  setting and on a once-per-install marker, so callers may call it freely and
    *  never need to know whether anything was sent. */
-  telemetryEvent: (event: string) => invoke<void>("telemetry_event", { event }),
   /** The global record accelerator in force (`""` = off). */
   recordHotkeyGet: () => invoke<string>("record_hotkey_get"),
   /** Register `accel` (`""` clears) and persist it. Rejects when the OS refuses
@@ -517,35 +505,7 @@ export const ipc = {
   // is undoable from the note's history.
   transcribeNote: (noteId: string, scope: "pending" | "all") =>
     invoke<void>("transcribe_note", { noteId, scope }),
-  // Cloud audio sync: upload a finished recording to its workspace, or pull a
-  // shared note's audio down for local playback.
-  uploadNoteAudio: (noteId: string) => invoke<void>("cloud_upload_note_audio", { noteId }),
-  downloadNoteAudio: (noteId: string) => invoke<boolean>("cloud_download_note_audio", { noteId }),
-  // Per-session asset sync (#16): upload every take's assets after a recording
-  // / re-diarize, or pull a shared note's sessions (rebuilds sessions.json +
-  // fetches each take's playback + timeline). Returns true when sessions landed.
-  uploadNoteSessions: (noteId: string) => invoke<void>("cloud_upload_note_sessions", { noteId }),
-  downloadNoteSessions: (noteId: string) =>
-    invoke<boolean>("cloud_download_note_sessions", { noteId }),
-  // Opportunistic repair on note open: attach any per-session asset the server
-  // is missing, re-sending nothing it already has. Covers the post-recording
-  // upload never having run (app quit, network down) — without it, a stranded
-  // timeline is stranded for good and teammates never see the speaker labels.
-  repairNoteSessions: (noteId: string) =>
-    invoke<void>("cloud_repair_note_sessions", { noteId }),
-  // Who (if anyone) is currently recording a shared note. null = nobody, a
-  // Personal note, or the cloud isn't configured. Drives the recording-lock
-  // banner + disabled Record button so teammates don't record the same note.
-  noteRecordingStatus: (noteId: string) =>
-    invoke<RecordingLockStatus | null>("cloud_note_recording_status", { noteId }),
-  // The rename picker's two suggestion halves (#116): every distinct speaker
-  // label in the active workspace with usage counters, and the workspace member
-  // names. Fetched once per strip mount; ranking and filtering happen in TS
-  // (`lib/speakerSuggest.ts`). `speakerRoster` is best-effort by design and
-  // serves a cached roster when offline — unlike `cloudApi.workspaceMembers`,
-  // which member management needs to fail loudly.
   speakerLabelStats: () => invoke<SpeakerLabelStat[]>("speaker_label_stats"),
-  speakerRoster: () => invoke<string[]>("cloud_speaker_roster"),
   // The name to prefill when renaming the literal `You:` label (#116 part 2):
   // `user_display_name` → workspace account name → macOS full name. The cloud
   // name is passed in because the store already holds it, so the prefill never
@@ -820,15 +780,6 @@ export const ipc = {
   ) => invoke<void>("chat_set_pin", { ...targetIds(target), conversationId, kind, value }),
   chatGetPin: (target: ChatTarget, kind: ChatPinKind, conversationId: string | null = null) =>
     invoke<string>("chat_get_pin", { ...targetIds(target), conversationId, kind }),
-  // Workspace turn allowance for the composer meter (issue #69). null in personal
-  // context, and on any unavailable/error/unmetered outcome — a meter never
-  // errors the pane, so the caller just hides the display when this is null.
-  chatUsage: () => invoke<ChatUsage | null>("chat_usage"),
-  /** How the workspace's retrieval index looks to search, or null when there's no
-   *  information (Personal, an older server, or any failure — the caller keeps its
-   *  local guess). See #102: only the server can tell a backfilling index apart
-   *  from a genuinely empty library. */
-  chatIndexState: () => invoke<ChatIndexState | null>("chat_index_state"),
   // Rebuild a Note's retrieval index — called on Note-view unmount so edits
   // that didn't trigger summarize/diarize still land in search.
   chatReindexNote: (noteId: string) => invoke<void>("chat_reindex_note", { noteId }),

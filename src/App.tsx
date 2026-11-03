@@ -1,29 +1,27 @@
+import { useEffect, useState } from "react";
 import {
-  Routes,
-  Route,
   Navigate,
-  useNavigate,
+  Route,
+  Routes,
   useLocation,
+  useNavigate,
   type Location,
 } from "react-router-dom";
-import { useEffect, useState } from "react";
 import { Layout } from "./components/Layout";
-import { Home } from "./pages/Home";
-import { AllNotes } from "./pages/AllNotes";
-import { Chat, FolderChat } from "./pages/Chat";
-import { Note } from "./pages/Note";
-import { Folder } from "./pages/Folder";
-import { Trash } from "./pages/Trash";
-import { SettingsDialog } from "./pages/settings/SettingsDialog";
-import { Onboarding } from "./pages/onboarding";
 import { ipc } from "./lib/ipc";
+import { usePaletteBoot } from "./lib/palette";
 import { useGlobalShortcuts } from "./lib/shortcuts";
 import { bindBackendListeners, useNotesStore } from "./lib/store";
-import { useCloudStore } from "./lib/cloud";
-import { bindDeepLinks } from "./lib/deepLink";
 import { useThemeBoot } from "./lib/theme";
-import { usePaletteBoot } from "./lib/palette";
 import { useZoomBoot } from "./lib/zoom";
+import { AllNotes } from "./pages/AllNotes";
+import { Chat, FolderChat } from "./pages/Chat";
+import { Folder } from "./pages/Folder";
+import { Home } from "./pages/Home";
+import { Note } from "./pages/Note";
+import { Trash } from "./pages/Trash";
+import { Onboarding } from "./pages/onboarding";
+import { SettingsDialog } from "./pages/settings/SettingsDialog";
 
 export default function App() {
   useGlobalShortcuts();
@@ -31,7 +29,6 @@ export default function App() {
   usePaletteBoot();
   useZoomBoot();
   const refresh = useNotesStore((s) => s.refresh);
-  const refreshCloud = useCloudStore((s) => s.refresh);
 
   // Takeover guard. `null` = still reading the flag (render nothing — no flash
   // of either the app or the wizard); `false` = show the first-run wizard
@@ -65,10 +62,8 @@ export default function App() {
     // useDownloadStore through these). Idempotent via a module-level flag, so
     // Layout's own call stays a harmless no-op.
     bindBackendListeners();
-    bindDeepLinks();
     refresh();
-    refreshCloud();
-  }, [refresh, refreshCloud]);
+  }, [refresh]);
 
   // Still resolving the flag — render nothing to avoid a flash of the wrong UI.
   if (onboardingDone === null) {

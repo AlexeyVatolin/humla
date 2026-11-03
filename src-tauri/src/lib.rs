@@ -6,6 +6,7 @@ mod openai;
 mod anthropic;
 mod copilot;
 mod local_whisper;
+mod local_gigaam;
 mod diarize;
 mod echo;
 mod languages;
@@ -13,6 +14,7 @@ mod presets;
 mod wav;
 mod recording;
 mod menubar;
+mod meeting_detection;
 mod sessions;
 mod commands;
 mod stt;
@@ -89,14 +91,6 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // With the `cloud` feature (default), install the live cloud-sync observer:
-    // it starts the worker once configured + signed in and restarts it on
-    // login / workspace switch. Without the feature, sync is a no-op and the
-    // app never touches the network for sync.
-    #[cfg(feature = "cloud")]
-    run_with_sync(commands::cloud_worker::install);
-
-    #[cfg(not(feature = "cloud"))]
     run_with_sync(|_ctx| Arc::new(sync::NoopSync));
 }
 
@@ -134,8 +128,12 @@ where
                 // drops the Dock icon instead of ending the process, so a
                 // tray-started recording can outlive the window. Off (the
                 // default), this is inert and closing still quits.
-                if menubar::hide_on_close(window.app_handle()) {
-                    api.prevent_close();
+                if window.label() == "main" {
+                    if menubar::hide_on_close(window.app_handle()) {
+                        api.prevent_close();
+                    } else {
+                        meeting_detection::dismiss(window.app_handle());
+                    }
                 }
             }
         })
@@ -326,6 +324,7 @@ where
                 }
             };
             menubar::present_at_launch(app.handle(), tray_installed);
+            meeting_detection::install(app.handle());
             // The frontend reads the link itself; here it only needs the window.
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
@@ -337,6 +336,8 @@ where
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            meeting_detection::meeting_prompt_start,
+            meeting_detection::meeting_prompt_dismiss,
             commands::notes_list,
             commands::speaker_label_stats,
             commands::speaker_default_name,
@@ -345,8 +346,6 @@ where
             commands::notes_update,
             commands::notes_delete,
             commands::notes_move,
-            commands::notes_set_workspace,
-            commands::notes_set_private,
             commands::notes_set_date,
             commands::notes_list_trash,
             commands::notes_restore,
@@ -368,43 +367,6 @@ where
             commands::webhook_set_endpoint,
             commands::webhook_destination,
             commands::webhook_send_note,
-            commands::telemetry_event,
-            commands::cloud_status,
-            commands::cloud_configure,
-            commands::cloud_login,
-            commands::cloud_verify_two_factor,
-            commands::cloud_two_factor_setup,
-            commands::cloud_two_factor_enable,
-            commands::cloud_two_factor_recovery_codes,
-            commands::cloud_two_factor_disable,
-            commands::cloud_two_factor_members,
-            commands::cloud_set_workspace_require_2fa,
-            commands::cloud_save_recovery_codes,
-            commands::cloud_signup,
-            commands::cloud_resend_verification,
-            commands::cloud_request_password_reset,
-            commands::cloud_logout,
-            commands::cloud_create_workspace,
-            commands::cloud_select_workspace,
-            commands::cloud_rename_workspace,
-            commands::cloud_delete_workspace,
-            commands::cloud_leave_workspace,
-            commands::cloud_transfer_workspace,
-            commands::cloud_workspace_members,
-            commands::cloud_speaker_roster,
-            commands::cloud_pending_note_ids,
-            commands::cloud_upload_note_audio,
-            commands::cloud_download_note_audio,
-            commands::cloud_upload_note_sessions,
-            commands::cloud_repair_note_sessions,
-            commands::cloud_download_note_sessions,
-            commands::cloud_note_recording_status,
-            commands::cloud_add_member,
-            commands::cloud_invite_member,
-            commands::cloud_remove_member,
-            commands::cloud_set_member_role,
-            commands::cloud_billing_checkout,
-            commands::cloud_billing_portal,
             commands::app_data_dir,
             commands::system_arch,
             commands::mcp_server_path,
@@ -478,12 +440,6 @@ where
             commands::chat_get_owner_filter,
             commands::chat_set_pin,
             commands::chat_get_pin,
-            commands::chat_usage,
-            commands::chat_index_state,
-            commands::chat_key_meta,
-            commands::chat_key_set,
-            commands::chat_key_set_from_keychain,
-            commands::chat_key_delete,
             commands::chat_reindex_note,
             commands::chat_rebuild_index,
             commands::chat_stale_note_count,

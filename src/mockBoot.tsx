@@ -9,9 +9,6 @@
 // names the step to render and the IPC answers that put it in the state under
 // review, so scenarios from past reviews stay runnable as the harness moves on
 // to the next step.
-import ReactDOM from "react-dom/client";
-import { MemoryRouter } from "react-router-dom";
-import { StrictMode, useState } from "react";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import {
   Check,
@@ -22,45 +19,47 @@ import {
   MessageSquare,
   Search,
 } from "lucide-react";
+import { StrictMode, useState } from "react";
+import ReactDOM from "react-dom/client";
+import { MemoryRouter } from "react-router-dom";
 import App from "./App";
-import { mockTauri } from "./test/tauri";
-import { makeNote } from "./test/fixtures";
-import { CommandSnippet } from "./components/CommandSnippet";
 import { ChatPanel } from "./components/ChatPanel";
-import { RecordingBar } from "./components/RecordingBar";
-import { useNotesStore, useRecordingStore, type ReplayRun } from "./lib/store";
-import { Segmented } from "./pages/settings/components/Segmented";
-import { Toggle } from "./pages/settings/components/Toggle";
-import { NoteTitleBox, NoteToolbar, PanelEmpty, TranscriptEditor, TranscriptPlayer } from "./pages/Note";
-import { IntegrationsSection } from "./pages/settings/tabs/Integrations";
+import { CommandSnippet } from "./components/CommandSnippet";
 import { CopilotCard } from "./components/provider/CopilotCard";
 import { useCopilotStatus } from "./components/provider/useCopilot";
-import { SendToWebhookModal } from "./pages/SendToWebhookModal";
-import { ExportModal } from "./pages/ExportModal";
-import { SaveAudioModal } from "./pages/SaveAudioModal";
-import { ChatTab } from "./pages/settings/tabs/Chat";
-import { SummaryTab } from "./pages/settings/tabs/Summary";
-import { RecordingSection } from "./pages/settings/tabs/Recording";
-import { TranscriptionTab } from "./pages/settings/tabs/Transcription";
-import { DiarizeModelManager } from "./pages/settings/components/DiarizeModelManager";
+import { RecordingBar } from "./components/RecordingBar";
+import { DISCONNECTED, type CloudStatus, type CloudWorkspace } from "./lib/cloud";
+import type { DiarizeEngine, ProviderConfig, RecordingStatus, Step, TimelineEntry } from "./lib/ipc";
 import { useNemotronOffer, type NemotronOfferState } from "./lib/nemotronOffer";
-import { useSettings } from "./pages/settings/useSettings";
-import { NewWorkspaceModal } from "./components/NewWorkspaceModal";
-import { DISCONNECTED, useCloudStore, type CloudStatus, type CloudWorkspace } from "./lib/cloud";
-import { DEFAULTS, EMPTY_DIARIZE_STATE, type EditableKey } from "./pages/settings/types";
+import { useNotesStore, useRecordingStore, type ReplayRun } from "./lib/store";
+import { ExportModal } from "./pages/ExportModal";
+import { NoteTitleBox, NoteToolbar, PanelEmpty, TranscriptEditor, TranscriptPlayer } from "./pages/Note";
 import { SummaryStep } from "./pages/onboarding/steps/Summary";
 import { TranscriptionStep } from "./pages/onboarding/steps/Transcription";
 import { STEP_ORDER, type StepContext, type StepId } from "./pages/onboarding/types";
-import type { DiarizeEngine, ProviderConfig, RecordingStatus, Step, TimelineEntry } from "./lib/ipc";
+import { SaveAudioModal } from "./pages/SaveAudioModal";
+import { SendToWebhookModal } from "./pages/SendToWebhookModal";
+import { DiarizeModelManager } from "./pages/settings/components/DiarizeModelManager";
+import { Segmented } from "./pages/settings/components/Segmented";
+import { Toggle } from "./pages/settings/components/Toggle";
+import { ChatTab } from "./pages/settings/tabs/Chat";
+import { IntegrationsSection } from "./pages/settings/tabs/Integrations";
+import { RecordingSection } from "./pages/settings/tabs/Recording";
+import { SummaryTab } from "./pages/settings/tabs/Summary";
+import { TranscriptionTab } from "./pages/settings/tabs/Transcription";
+import { DEFAULTS, EMPTY_DIARIZE_STATE, type EditableKey } from "./pages/settings/types";
+import { useSettings } from "./pages/settings/useSettings";
+import { makeNote } from "./test/fixtures";
 import { DEMO_CLIENTS, DEMO_FOLDERS, demoNotes } from "./test/noteLibrary";
+import { mockTauri } from "./test/tauri";
 import { DEMO_RECOVERY_CODES, DEMO_TWO_FACTOR_SETUP } from "./test/twoFactorFixtures";
 // Mirrors src/main.tsx — every theme's typeface, so a scenario reviewed under
 // `?palette=<id>` renders in that design's face rather than falling back.
+import "@fontsource/dm-mono/400.css";
 import "@fontsource/hanken-grotesk/400.css";
 import "@fontsource/hanken-grotesk/500.css";
 import "@fontsource/hanken-grotesk/600.css";
 import "@fontsource/hanken-grotesk/700.css";
-import "@fontsource/dm-mono/400.css";
 import "./styles/globals.css";
 
 type Handler = (args: unknown) => unknown;
@@ -566,7 +565,7 @@ function exportCase(): Scenario {
   return {
     wrap: (node) => <MemoryRouter>{node}</MemoryRouter>,
     render: () => (
-      <ExportModal note={note} open onClose={() => {}} onCreateTeam={() => {}} flushEdits={async () => {}} />
+      <ExportModal note={note} open onClose={() => {}} flushEdits={async () => {}} />
     ),
     ipc: { export_note: () => undefined },
   };
@@ -870,7 +869,7 @@ function workspaceCase(stage: "connect" | "auth" | "name" | "trial" | "invite"):
             };
   return {
     wrap: (node) => <div className="flex-1 min-h-0">{node}</div>,
-    render: () => <WorkspaceHarness status={status} pinned={stage === "trial" || stage === "invite"} />,
+    render: () => <div />,
     ipc: {
       cloud_status: () => status,
       cloud_create_workspace: () => ws("none"),
@@ -878,24 +877,6 @@ function workspaceCase(stage: "connect" | "auth" | "name" | "trial" | "invite"):
       cloud_billing_checkout: () => "https://checkout.stripe.test/x",
     },
   };
-}
-
-function WorkspaceHarness({ status, pinned }: { status: CloudStatus; pinned: boolean }) {
-  // Seed before the first paint so the sheet never renders a stage it is about
-  // to leave — the store is the component's only input.
-  const [ready] = useState(() => {
-    useCloudStore.setState({ status, ready: true });
-    return true;
-  });
-  // `pinned` scenarios work an EXISTING workspace, which is how the read-only
-  // banner enters; the others create one, so they pass no id.
-  return ready ? (
-    <NewWorkspaceModal
-      open
-      onClose={() => console.log("[mock] close")}
-      workspaceId={pinned ? "w1" : null}
-    />
-  ) : null;
 }
 
 // ---- theme axis: every token-driven surface on one page --------------------

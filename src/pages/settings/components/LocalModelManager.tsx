@@ -1,4 +1,3 @@
-import type { ProviderConfig } from "../../../lib/ipc";
 import { LANGUAGES } from "../../../lib/languages";
 import type { LocalState } from "../types";
 import { ModelDownloadCard } from "../../../components/provider/ModelDownloadCard";
@@ -9,19 +8,12 @@ function languageLabel(code: string | null): string {
   return found?.label ?? code;
 }
 
-// The settings model list: one ModelDownloadCard per registry entry.
-// Multilingual models carry the default-model radio (they're candidates for
-// the default's model_id); language-specific models don't — they're picked
-// via per-language overrides. Download/delete route through the parent's
-// orchestrating handlers (auto-default promotion + suggest-override flash
-// live in useSettings, not here).
 export function LocalModelManager({
   state,
   activeId,
   onDownload,
   onDelete,
   onSelect,
-  setLanguageOverride,
 }: {
   state: LocalState;
   activeId: string;
@@ -30,20 +22,14 @@ export function LocalModelManager({
   onDownload: (id: string) => void;
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
-  // Used by the suggest_language_override flash affordance after a
-  // language-specific model is downloaded.
-  setLanguageOverride: (language: string, cfg: ProviderConfig) => Promise<void>;
 }) {
   return (
     <>
       <p className="text-xs text-[var(--color-text-muted)] py-3">
-        Pick a multilingual model as the default for transcription. Language-
-        specific models (e.g. NB Whisper for Norwegian) sit alongside but are
-        picked via per-language overrides. All models run on-device via Metal.
+        Choose a local model for transcription.
       </p>
       {state.models.map((m) => {
-        const selectable = m.kind === "multilingual";
-        const isActive = selectable && m.id === activeId;
+        const isActive = m.id === activeId;
         return (
           <ModelDownloadCard
             key={m.id}
@@ -54,7 +40,7 @@ export function LocalModelManager({
                 : languageLabel(m.specificLanguage)
             }
             selected={isActive}
-            onSelect={selectable ? () => onSelect(m.id) : undefined}
+            onSelect={() => onSelect(m.id)}
             onDownload={onDownload}
             onDelete={onDelete}
             warning={
@@ -76,23 +62,6 @@ export function LocalModelManager({
           role="status"
         >
           <span className="break-all">{state.flash.message}</span>
-          {state.flash.kind === "suggest_language_override" && (
-            <button
-              type="button"
-              onClick={() => {
-                if (state.flash?.kind !== "suggest_language_override") return;
-                setLanguageOverride(state.flash.language, {
-                  provider: "local",
-                  model_id: state.flash.modelId,
-                  preset: "quality",
-                  use_gpu: true,
-                });
-              }}
-              className="ml-auto text-xs px-2 py-1 rounded border border-[var(--color-line)] hover:bg-[var(--color-canvas)] whitespace-nowrap"
-            >
-              Add as {languageLabel(state.flash.language)} override
-            </button>
-          )}
         </div>
       )}
       {state.error && (

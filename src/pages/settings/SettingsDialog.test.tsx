@@ -6,6 +6,41 @@ import { writeSetting } from "../../lib/settingsBus";
 import { renderApp, openSettingsFromSidebar } from "../../test/app";
 
 describe("settings dialog", () => {
+  it("lets the user disable Zoom meeting reminders", async () => {
+    const writes: unknown[] = [];
+    renderApp("/settings?tab=recording", {
+      settings_set: (args) => { writes.push(args); return null; },
+    });
+    const dialog = await screen.findByRole("dialog", { name: /settings/i });
+    const toggle = await within(dialog).findByRole("switch", { name: "Zoom meeting reminders" });
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(toggle);
+    expect(writes).toContainEqual({ key: "zoom_meeting_prompt", value: "false" });
+  });
+
+  it("selects GigaAM as the default model without a language override", async () => {
+    const writes: unknown[] = [];
+    renderApp("/settings?tab=transcription", {
+      get_transcribe_config: () => ({
+        default: { provider: "local", model_id: "large-v3-turbo-q5", preset: "quality", use_gpu: true },
+        per_language: {},
+      }),
+      local_whisper_models: () => [{
+        id: "gigaam-v3-e2e-rnnt", label: "GigaAM v3 E2E-RNN-T", description: "Russian speech recognition.",
+        filename: "gigaam-v3-e2e-rnnt-F16.gguf", sizeBytesHint: 452381408,
+        kind: "language_specific", specificLanguage: "ru", downloaded: true, sizeBytes: 452381408, path: null,
+      }],
+      set_transcribe_config: (args) => { writes.push(args); return null; },
+    });
+    const dialog = await screen.findByRole("dialog", { name: /settings/i });
+    await within(dialog).findByText("Provider");
+    await userEvent.click(within(dialog).getAllByRole("button", { name: "Advanced" })[0]);
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Use GigaAM v3 E2E-RNN-T" }));
+    expect(writes.at(-1)).toMatchObject({ config: {
+      default: { provider: "local", model_id: "gigaam-v3-e2e-rnnt" }, per_language: {},
+    } });
+  });
+
   it("dismisses release notes before opening Settings with the keyboard shortcut", async () => {
     const title = latestReleases[0].title;
     renderApp("/");
@@ -366,7 +401,7 @@ describe("settings dialog", () => {
     expect(within(dialog).queryByRole("searchbox")).not.toBeInTheDocument();
   });
 
-  it("shows the six sections in the sidebar nav", async () => {
+  it("shows the local app sections without account or billing", async () => {
     renderApp("/settings");
     const dialog = await screen.findByRole("dialog", { name: /settings/i });
 
@@ -378,7 +413,6 @@ describe("settings dialog", () => {
       "Transcription",
       "Summaries",
       "Chat",
-      "Account",
       "General",
     ]);
   });
@@ -471,7 +505,7 @@ describe("settings dialog", () => {
       within(dialog).queryByText("Per-language overrides"),
     ).not.toBeInTheDocument();
     expect(
-      within(dialog).queryByText(/pick a multilingual model/i),
+      within(dialog).queryByText(/choose a local model/i),
     ).not.toBeInTheDocument();
 
     await userEvent.click(
@@ -482,7 +516,7 @@ describe("settings dialog", () => {
       await within(dialog).findByText("Per-language overrides"),
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByText(/pick a multilingual model/i),
+      within(dialog).getByText(/choose a local model/i),
     ).toBeInTheDocument();
   });
 
@@ -706,6 +740,10 @@ describe("settings dialog", () => {
     expect(
       within(dialog).getByRole("switch", { name: /thinking/i }),
     ).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("switch", { name: /thinking/i }));
+    expect(writes.local_llm_think).toBe("true");
+    await userEvent.click(within(dialog).getByRole("switch", { name: /thinking/i }));
+    expect(writes.local_llm_think).toBe("false");
 
     await userEvent.click(
       within(dialog).getByRole("combobox", { name: /choose a model|qwen3/i }),
@@ -714,20 +752,6 @@ describe("settings dialog", () => {
       within(dialog).getByRole("option", { name: "qwen3:8b" }),
     );
     expect(writes.local_llm_model).toBe("qwen3:8b");
-  });
-
-  it("deep-links ?tab=account to the merged Account section", async () => {
-    renderApp("/settings?tab=account");
-    const dialog = await screen.findByRole("dialog", { name: /settings/i });
-    expect(
-      within(dialog).getByRole("tab", { name: "Account" }),
-    ).toHaveAttribute("aria-selected", "true");
-    // Signed out: the merged section is just the connect surface — workspace
-    // management appears in the same section once signed in (covered in
-    // AccountSection.test.tsx).
-    expect(
-      await within(dialog).findByRole("heading", { name: /connect to sync/i }),
-    ).toBeInTheDocument();
   });
 
   it("switches sections from the nav and reflects it in the URL", async () => {

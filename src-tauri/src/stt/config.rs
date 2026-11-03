@@ -73,9 +73,19 @@ pub struct OpenAiConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LocalWhisperConfig {
+    #[serde(deserialize_with = "read_local_model_id")]
     pub model_id: String,
     pub preset: String,
     pub use_gpu: bool,
+}
+
+fn read_local_model_id<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
+    let id = String::deserialize(deserializer)?;
+    Ok(if id == "gigaam-v3-rnnt" {
+        crate::local_gigaam::MODEL_ID.to_string()
+    } else {
+        id
+    })
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -237,6 +247,23 @@ mod tests {
             }
             _ => panic!("expected Local"),
         }
+    }
+
+    #[test]
+    fn old_gigaam_selection_upgrades_in_default_and_language_overrides() {
+        let cfg: TranscribeConfig = serde_json::from_str(r#"{
+            "default":{"provider":"local","model_id":"gigaam-v3-rnnt","preset":"quality","use_gpu":true},
+            "per_language":{
+                "ru":{"provider":"local","model_id":"gigaam-v3-rnnt","preset":"fast","use_gpu":true},
+                "no":{"provider":"local","model_id":"nb-whisper-large-q5","preset":"balanced","use_gpu":false}
+            }
+        }"#).unwrap();
+        assert_eq!(cfg.default.model(), crate::local_gigaam::MODEL_ID);
+        assert_eq!(cfg.resolve("ru").model(), crate::local_gigaam::MODEL_ID);
+        assert_eq!(cfg.resolve("no").model(), "nb-whisper-large-q5");
+        let saved = serde_json::to_string(&cfg).unwrap();
+        assert!(!saved.contains("\"gigaam-v3-rnnt\""));
+        assert_eq!(serde_json::from_str::<TranscribeConfig>(&saved).unwrap(), cfg);
     }
 
     #[test]

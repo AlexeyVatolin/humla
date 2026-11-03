@@ -54,6 +54,15 @@ pub fn default_model() -> &'static ModelInfo {
 
 const MODELS: &[ModelInfo] = &[
     ModelInfo {
+        id: crate::local_gigaam::MODEL_ID,
+        label: "GigaAM v3 E2E-RNN-T",
+        filename: crate::local_gigaam::MODEL_FILENAME,
+        url: "https://huggingface.co/handy-computer/gigaam-v3-e2e-rnnt-gguf/resolve/f719d70812344f4d0fb8c11c0887b190501a7465/gigaam-v3-e2e-rnnt-F16.gguf",
+        size_bytes_hint: 452_381_408,
+        description: "Russian speech recognition with punctuation and capitalization. Runs on the Apple GPU.",
+        kind: ModelKind::LanguageSpecific { language: "ru" },
+    },
+    ModelInfo {
         id: "large-v3-turbo-q5",
         label: "Large v3 Turbo (quantized)",
         filename: "ggml-large-v3-turbo-q5_0.bin",
@@ -108,7 +117,12 @@ pub type SharedContext = Arc<Mutex<Option<LoadedModel>>>;
 pub struct LoadedModel {
     pub path: PathBuf,
     pub use_gpu: bool,
-    pub ctx: Arc<WhisperContext>,
+    pub engine: Engine,
+}
+
+pub enum Engine {
+    Whisper(Arc<WhisperContext>),
+    GigaAm(crate::local_gigaam::Worker),
 }
 
 pub fn new_shared() -> SharedContext {
@@ -205,7 +219,9 @@ fn ensure_loaded(
     let mut guard = shared.lock();
     if let Some(loaded) = guard.as_ref() {
         if loaded.path == model_path && loaded.use_gpu == use_gpu {
-            return Ok(loaded.ctx.clone());
+            if let Engine::Whisper(ctx) = &loaded.engine {
+                return Ok(ctx.clone());
+            }
         }
     }
     if !model_path.exists() {
@@ -230,7 +246,7 @@ fn ensure_loaded(
     *guard = Some(LoadedModel {
         path: model_path.to_path_buf(),
         use_gpu,
-        ctx: arc.clone(),
+        engine: Engine::Whisper(arc.clone()),
     });
     Ok(arc)
 }
@@ -255,7 +271,11 @@ fn context_params(use_gpu: bool) -> WhisperContextParameters<'static> {
 /// is ready and inference runs at ~5× realtime.
 pub async fn prewarm(shared: SharedContext, model_path: PathBuf, use_gpu: bool) -> Result<()> {
     tokio::task::spawn_blocking(move || -> Result<()> {
-        ensure_loaded(&shared, &model_path, use_gpu)?;
+        if crate::local_gigaam::is_model(&model_path) {
+            crate::local_gigaam::with_worker(&shared, &model_path, |_| Ok(()))?;
+        } else {
+            ensure_loaded(&shared, &model_path, use_gpu)?;
+        }
         Ok(())
     })
     .await
@@ -297,6 +317,10 @@ pub async fn transcribe_file_with_words(
     preset: Preset,
     audio_path: &Path,
 ) -> Result<(String, Vec<Word>, Option<String>)> {
+    if crate::local_gigaam::is_model(&model_path) {
+        anyhow::ensure!(language == "ru" || language == "auto", "GigaAM supports Russian only");
+        return crate::local_gigaam::transcribe_file(shared, model_path, audio_path).await;
+    }
     let out = transcribe_file_segments(
         shared,
         model_path,

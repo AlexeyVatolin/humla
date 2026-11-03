@@ -4,6 +4,7 @@ dist/
 .vite/
 *.log
 *.tsbuildinfo
+test-audio/
 
 # Tauri / Rust
 src-tauri/target/

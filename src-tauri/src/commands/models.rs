@@ -82,7 +82,7 @@ pub(crate) fn local_model_path(
     let info =
         local_whisper::find_model(model_id).unwrap_or_else(local_whisper::default_model);
     let path = dir.join(info.filename);
-    if path.exists() {
+    if path.exists() || model_id == crate::local_gigaam::MODEL_ID {
         return Ok(path);
     }
     Ok(dir.join(local_whisper::default_model().filename))

@@ -12,11 +12,10 @@
 // only — they never gate recording (the spec: mic-only is a supported mode,
 // summary is optional, cloud never nags).
 
-import { ipc, type TranscribeProvider } from "./ipc";
 import { copilotReady } from "./copilot";
+import { ipc, type TranscribeProvider } from "./ipc";
 import { KEY_PROVIDERS } from "./providers";
 import { chosenCloudProvider, customDefaultWorking, isCloudProvider } from "./transcribeDefault";
-import { cloudApi } from "./cloud";
 
 // A model download the chip / recap can surface as "Downloading — NN%".
 // Sourced from the global download slice (store.ts), not recomputed here.
@@ -147,23 +146,13 @@ export async function computeSetupStatus(): Promise<SetupStatus> {
   }
 
   // ---- Cloud workspace (informational) ------------------------------------
-  // Read via the cloud command directly rather than the React store so this
-  // function has no store dependency and can run outside a component.
-  let cloudWorkspace: string | null = null;
-  try {
-    const status = await cloudApi.status();
-    cloudWorkspace = status.current_workspace?.name ?? null;
-  } catch {
-    cloudWorkspace = null;
-  }
-
   return {
     micGranted,
     screenGranted,
     stt,
     summaryConfigured,
     summaryProvider: summaryProvider ?? "openai",
-    cloudWorkspace,
+    cloudWorkspace: null,
     language: language ?? "auto",
     pipelineReady: micGranted && stt.working,
   };

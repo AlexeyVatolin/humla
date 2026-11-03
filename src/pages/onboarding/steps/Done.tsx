@@ -12,24 +12,23 @@
 // Primary CTA: "Create your first note" — creates a real note and lands the
 // user IN it, wizard gone. The create → complete(destination) sequence hands
 // the route to the App-level onDone so BOTH entry modes end on /note/<id>.
-import { useCallback, useEffect, useState } from "react";
 import {
-  Mic,
-  MonitorSpeaker,
-  HardDriveDownload,
-  Sparkles,
-  Cloud,
-  Languages,
   Check,
   ChevronRight,
+  HardDriveDownload,
+  Languages,
+  Mic,
+  MonitorSpeaker,
   PlusCircle,
+  Sparkles
 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { ipc } from "../../../lib/ipc";
-import { useDownloadStore, useNotesStore } from "../../../lib/store";
-import { computeSetupStatus, type SetupStatus } from "../../../lib/setupStatus";
 import { LANGUAGES } from "../../../lib/languages";
-import type { StepContext } from "../types";
+import { computeSetupStatus, type SetupStatus } from "../../../lib/setupStatus";
+import { useDownloadStore, useNotesStore } from "../../../lib/store";
 import { StepShell } from "../StepShell";
+import type { StepContext } from "../types";
 
 type PillTone = "ok" | "muted" | "warn";
 
@@ -208,15 +207,6 @@ export function DoneStep({ ctx }: { ctx: StepContext }) {
           }
           tone={s == null ? "muted" : s.summaryConfigured ? "ok" : "muted"}
           onClick={() => ctx.goTo("summary")}
-        />
-
-        {/* Humla Cloud — informational; "Local only" is the happy default. */}
-        <ChecklistRow
-          icon={<Cloud size={16} strokeWidth={1.8} />}
-          label="Humla Cloud"
-          value={s == null ? "Checking…" : (s.cloudWorkspace ?? "Local only")}
-          tone={s == null ? "muted" : s.cloudWorkspace ? "ok" : "muted"}
-          onClick={() => ctx.goTo("cloud")}
         />
 
         {/* Language — meeting language display name. */}

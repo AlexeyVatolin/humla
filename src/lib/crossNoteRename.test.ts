@@ -55,7 +55,6 @@ describe("renameSpeakerAcrossNotes", () => {
     return {
       updateNote: vi.fn().mockResolvedValue(undefined),
       noteTimelineRename: vi.fn().mockResolvedValue(undefined),
-      uploadNoteSessions: vi.fn().mockResolvedValue(undefined),
       reindexNote: vi.fn().mockResolvedValue(undefined),
       onRewritten: vi.fn(),
     };
@@ -91,7 +90,6 @@ describe("renameSpeakerAcrossNotes", () => {
     // The same chain a single-note rename takes, so the sync ping and the
     // retrieval index stay correct rather than being reimplemented here.
     expect(d.noteTimelineRename).toHaveBeenCalledWith("a", "You", "Michael");
-    expect(d.uploadNoteSessions).toHaveBeenCalledWith("a");
     expect(d.reindexNote).toHaveBeenCalledWith("a");
   });
 
@@ -180,10 +178,6 @@ describe("renameSpeakerAcrossNotes", () => {
       newLabel: "Anna",
       ...d,
     });
-
-    // Sharing one try meant a failed timeline rename also skipped these, so the
-    // note dropped out of retrieval freshness while the toast said "renamed".
-    expect(d.uploadNoteSessions).toHaveBeenCalledWith("a");
     expect(d.reindexNote).toHaveBeenCalledWith("a");
   });
 

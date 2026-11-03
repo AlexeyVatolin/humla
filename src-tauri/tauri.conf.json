@@ -20,14 +20,19 @@
         "visible": false,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "trafficLightPosition": { "x": 18, "y": 24 }
+        "trafficLightPosition": {
+          "x": 18,
+          "y": 24
+        }
       }
     ],
     "security": {
       "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost blob: data:; media-src 'self' asset: http://asset.localhost; font-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost",
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPDATA/recordings/**"]
+        "scope": [
+          "$APPDATA/recordings/**"
+        ]
       }
     },
     "macOSPrivateApi": true
@@ -35,27 +40,41 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": ["app", "dmg"],
-    "icon": ["icons/icon.png"],
+    "targets": [
+      "app",
+      "dmg"
+    ],
+    "icon": [
+      "icons/icon.png"
+    ],
     "macOS": {
       "minimumSystemVersion": "13.0",
       "entitlements": "entitlements.plist",
-      "signingIdentity": "Developer ID Application: MICHAEL MEHLUM WILHELMSEN (NBUP88JQ35)"
+      "signingIdentity": "-"
     },
-    "externalBin": ["binaries/audio-capture", "binaries/speaker-diarize", "binaries/humla-mcp"],
+    "externalBin": [
+      "binaries/audio-capture",
+      "binaries/speaker-diarize",
+      "binaries/humla-mcp",
+      "binaries/humla-gigaam"
+    ],
     "resources": {
       "resources/default.metallib": "default.metallib"
     }
   },
   "plugins": {
     "deep-link": {
-      "desktop": { "schemes": ["humla"] }
+      "desktop": {
+        "schemes": [
+          "humla"
+        ]
+      }
     },
     "updater": {
       "endpoints": [
-        "https://github.com/michaelwilhelmsen/humla/releases/latest/download/latest.json"
+        "https://github.com/AlexeyVatolin/humla/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJDMjkzMDJGQjYxQTcyQTMKUldTamNocTJMekFwTEhISnRDNmJqemxSaHo3ejdmcFVZODYrMFdjaGQwNnUxTnVhczE1Skd5L2wK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMzNTZEMTlFMzAzN0ZDQjAKUldTdy9EY3dudEZXTTR5Qy9GVDRkTjduMVRyaUIyWk4reE9HUjl0VHlnbVRuTzJkektsN3NqdkUK"
     }
   }
 }

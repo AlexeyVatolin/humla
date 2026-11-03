@@ -231,24 +231,8 @@ export function useSettings() {
       }
       const downloaded = models.find((m) => m.id === modelId);
       const label = downloaded?.label ?? modelId;
-      // For language-specific models, surface a one-click "Add as
-      // <language> override?" affordance so the user gets the v0.23
-      // auto-apply convenience back without the implicit routing.
-      // Skip when an override for that language already exists.
-      if (
-        downloaded?.kind === "language_specific" &&
-        downloaded.specificLanguage &&
-        !(downloaded.specificLanguage in transcribeConfig.per_language)
-      ) {
-        flashLocal({
-          kind: "suggest_language_override",
-          message: `${label} downloaded.`,
-          language: downloaded.specificLanguage,
-          modelId,
-        });
-      } else {
-        flashLocal({ kind: "info", message: `${label} downloaded` });
-      }
+      flashLocal({ kind: "info", message: `${label} downloaded` });
+
     } catch (e) {
       const models = await ipc.localWhisperModels().catch(() => local.models);
       setLocal((p) => {

@@ -95,7 +95,6 @@ export async function renameSpeakerAcrossNotes({
   newLabel,
   updateNote = ipc.updateNote,
   noteTimelineRename = ipc.noteTimelineRename,
-  uploadNoteSessions = ipc.uploadNoteSessions,
   reindexNote = ipc.chatReindexNote,
   onRewritten,
 }: {
@@ -107,7 +106,6 @@ export async function renameSpeakerAcrossNotes({
   // can be tested without a backend; no caller needs to pass them.
   updateNote?: (id: string, patch: { transcript: string }) => Promise<void>;
   noteTimelineRename?: (id: string, oldLabel: string, newLabel: string) => Promise<void>;
-  uploadNoteSessions?: (id: string) => Promise<void>;
   reindexNote?: (id: string) => Promise<void>;
   /** Optimistic local update, with the already-rewritten transcript. */
   onRewritten: (id: string, transcript: string) => void;
@@ -146,7 +144,6 @@ export async function renameSpeakerAcrossNotes({
     // it says.
     await settle(`timeline rename for ${id}`, () => noteTimelineRename(id, oldLabel, newLabel));
     // Re-upload rewritten timelines for shared notes (#16); a no-op in Personal.
-    await settle(`session upload for ${id}`, () => uploadNoteSessions(id));
     await settle(`reindex for ${id}`, () => reindexNote(id));
   }
   return { renamed, failed };

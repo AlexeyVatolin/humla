@@ -1,10 +1,7 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { useNavigate } from "react-router-dom";
 import { open as openExternal } from "@tauri-apps/plugin-shell";
 import {
   AlertTriangle,
+  Building2,
   ChevronDown,
   CornerDownLeft,
   FileText,
@@ -12,7 +9,6 @@ import {
   Folder,
   Loader2,
   MessageCircle,
-  Building2,
   MessageSquareQuote,
   Plus,
   Settings2,
@@ -20,49 +16,48 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import { useNavigate } from "react-router-dom";
+import remarkGfm from "remark-gfm";
+import { opensPromptPicker, promptsFor, type ChatPrompt } from "../lib/chatPrompts";
 import {
-  ipc,
-  onChatCitations,
-  onChatError,
-  onChatToolActivity,
-  onChatTextDelta,
-  type ChatCitation,
-  type ChatMessageDto,
-  type ChatPinKind,
-  type ChatScope,
-  type ChatIndexState,
-  ChatUsage,
-  type ConversationMeta,
-} from "../lib/ipc";
-import { useNotesStore } from "../lib/store";
-import { cloudApi, formatSeatPrice, useCloudStore, useMemberName, type ChatAddon, type ChatKeyMeta } from "../lib/cloud";
-import { useChatReadiness } from "./provider/useChatReadiness";
-import { SelectablePopover, type PopoverItem } from "./SelectablePopover";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/Popover";
-import { Combobox, type ComboboxOption } from "./ui/Combobox";
-import { suggestSpeakerLabels, type SpeakerSuggestionSource } from "../lib/speakerSuggest";
-import { ChatKeyEntry } from "./ChatKeyEntry";
-import {
-  usageTone,
-  liveChatErrorCopy,
-  groundingLikelyTruncated,
   conversationTitle,
+  groundingLikelyTruncated
 } from "../lib/chatSessions";
 import {
-  targetNoteId,
+  targetDefaultScope,
   targetFolderId,
   targetFromKey,
   targetKey,
-  targetDefaultScope,
+  targetNoteId,
   targetPinsScope,
   targetResumesOnOpen,
   type ChatTarget,
 } from "../lib/chatTarget";
-import { opensPromptPicker, promptsFor, type ChatPrompt } from "../lib/chatPrompts";
-import { RECOMMENDED_OLLAMA_MODEL, isOllamaUrl } from "../lib/localModels";
-import { CommandSnippet } from "./CommandSnippet";
+import { useCloudStore, useMemberName } from "../lib/cloud";
 import { cn } from "../lib/cn";
+import {
+  ipc,
+  onChatCitations,
+  onChatError,
+  onChatTextDelta,
+  onChatToolActivity,
+  type ChatCitation,
+  type ChatMessageDto,
+  type ChatPinKind,
+  type ChatScope,
+  type ConversationMeta
+} from "../lib/ipc";
+import { RECOMMENDED_OLLAMA_MODEL, isOllamaUrl } from "../lib/localModels";
 import { htmlToText } from "../lib/noteList";
+import { suggestSpeakerLabels, type SpeakerSuggestionSource } from "../lib/speakerSuggest";
+import { useNotesStore } from "../lib/store";
+import { CommandSnippet } from "./CommandSnippet";
+import { useChatReadiness } from "./provider/useChatReadiness";
+import { SelectablePopover, type PopoverItem } from "./SelectablePopover";
+import { Combobox, type ComboboxOption } from "./ui/Combobox";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/Popover";
 
 // Chat over the user's Notes (issues #46 + #47). The assistant runs an agentic
 // retrieval loop on the backend: it searches/reads notes with tools, streams
@@ -269,11 +264,6 @@ export function ChatPanel({
   const [activity, setActivity] = useState<string | null>(null);
   const [liveCitations, setLiveCitations] = useState<ChatCitation[]>([]);
   const [error, setError] = useState<string | null>(null);
-  // Machine reason for the last error (issue #76) → drives role-aware BYOK copy
-  // in the live pane. null when cleared; the personal loop and unknown errors
-  // report an empty reason, which liveChatErrorCopy treats the same (falls back
-  // to the server message).
-  const [errorReason, setErrorReason] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   // Scope chip breadth. Display state only — the backend conversation row is the
   // source of truth (issue #58); this mirrors it and is (re)initialised from it.
@@ -297,17 +287,6 @@ export function ChatPanel({
   // list replacement; normal sends (appended turns, streamed deltas) leave it
   // false so those stay announced (#64).
   const [bulkLoading, setBulkLoading] = useState(false);
-  // Workspace turn allowance for the composer meter (issue #69). null in personal
-  // context and on any unavailable/error/unmetered outcome → the display hides.
-  const [usage, setUsage] = useState<ChatUsage | null>(null);
-  // Workspace BYOK key metadata (issue #76). `undefined` = still checking (only
-  // in a managed workspace, to avoid flashing the composer before we know), then
-  // a `ChatKeyMeta` or `null`. Feeds the activation-pane decision.
-  const [keyMeta, setKeyMeta] = useState<ChatKeyMeta | null | undefined>(null);
-  // The server's view of the workspace retrieval index (#102). null = no
-  // information (Personal, an older server, or a failed lookup) → the empty-state
-  // copy falls back to the local sync proxy.
-  const [indexState, setIndexState] = useState<ChatIndexState | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   // The composer is auto-focused exactly once per mount, on the first transition
@@ -421,7 +400,6 @@ export function ChatPanel({
     setActivity(null);
     setLiveCitations([]);
     setError(null);
-    setErrorReason(null);
     setTruncated(false);
   }, []);
 
@@ -576,22 +554,11 @@ export function ChatPanel({
   const workspaceId = useCloudStore((s) =>
     s.status.logged_in ? s.status.current_workspace?.id ?? null : null,
   );
-  // BYOK activation surface (issue #76). `billingEnabled` marks the managed
-  // (humla-cloud) server — the only place the activation pane applies; on self-
-  // host it never shows (chat_disabled keeps its existing behaviour). Role +
-  // members drive owner-vs-member copy; the add-on config drives the pitch.
-  const billingEnabled = useCloudStore((s) => s.status.billing_enabled);
-  const wsRole = useCloudStore((s) => s.status.current_workspace?.role ?? null);
-  const members = useCloudStore((s) => s.members);
-  const addon = useCloudStore((s) => s.status.chat_addon ?? null);
-  const inWorkspace = !!workspaceId;
+  const inWorkspace = false;
   // The signed-in user's own id — compared against the pin DIRECTLY rather than
   // via `useOwnerName`, which returns null both for "that's you" and for "can't
   // resolve them". The chip has to tell those two apart (#103).
   const myUserId = useCloudStore((s) => s.status.user?.id ?? null);
-  const isOwner = wsRole === "owner";
-  const ownerMember = Object.values(members).find((m) => m.role === "owner");
-  const ownerName = ownerMember ? ownerMember.name || ownerMember.email : "the workspace owner";
   // Personal chat gates on personal readiness (a configured provider/key);
   // workspace chat does NOT — it runs on the workspace key, so a member without
   // a personal key still reaches the pane (composer or activation state, #76).
@@ -620,7 +587,7 @@ export function ChatPanel({
   // local check is already authoritative), an older server without the route, and
   // any failure — all of which fall back to the sync proxy rather than blocking.
   const syncing = useCloudStore((s) => s.syncStatus) === "syncing";
-  const indexNotReady = indexState === "empty" || indexState === "quarantined";
+  const indexNotReady = false;
   const globalPane = target.kind === "global";
   const nothingToSearch = globalPane && libraryEmpty && !syncing && !indexNotReady;
   const notesStillArriving = globalPane && libraryEmpty && (syncing || indexNotReady);
@@ -717,51 +684,6 @@ export function ChatPanel({
       : []),
   ];
 
-  // Activation gating (#76). Only on the managed server + a workspace. While the
-  // key metadata is still loading (undefined) show neither composer nor pane, so
-  // the composer doesn't flash before we know. `notActivated` = no key + no
-  // add-on (usage null). Self-host / personal never reach here. Computed here
-  // (above the effects) so the auto-focus effect can depend on it.
-  const billingWorkspace = inWorkspace && billingEnabled;
-  const activationLoading = billingWorkspace && keyMeta === undefined;
-  const notActivated = billingWorkspace && keyMeta != null && !keyMeta.configured && !usage;
-
-  // Fetch, gen-guarded, the workspace turn allowance for the composer meter
-  // (#69) and — on the managed server — the BYOK key metadata for the activation
-  // decision (#76). Personal → clear both, no round-trip. The backend collapses
-  // every unavailable/error/unmetered usage case to null (the meter hides).
-  const refreshActivation = useCallback(
-    async (gen: number) => {
-      if (!workspaceId) {
-        setUsage(null);
-        setKeyMeta(null);
-        setIndexState(null);
-        return;
-      }
-      try {
-        const [u, m, ix] = await Promise.all([
-          ipc.chatUsage(),
-          billingEnabled ? cloudApi.chatKeyMeta(workspaceId) : Promise.resolve(null),
-          // Settled separately: this one is a HINT. A rejection here must not
-          // take the usage meter and activation decision down with it.
-          ipc.chatIndexState().catch(() => null),
-        ]);
-        if (gen === switchGenRef.current) {
-          setUsage(u);
-          setKeyMeta(m);
-          setIndexState(ix);
-        }
-      } catch {
-        if (gen === switchGenRef.current) {
-          setUsage(null);
-          setKeyMeta(null);
-          setIndexState(null);
-        }
-      }
-    },
-    [workspaceId, billingEnabled],
-  );
-
   // Load persisted history + breadth on mount, note change, and workspace
   // switch, clearing transient state. Keying on the workspace id makes a context
   // switch reload the right conversation — this replaces the old per-tenant
@@ -776,13 +698,6 @@ export function ChatPanel({
     // Hide the history affordance until the fresh list is known (no flicker of
     // the previous note's conversations on switch, #62).
     setConversations([]);
-    // Clear the turn meter until the new context's fetch resolves (#69). Scoped
-    // to this effect, not resetTransient: usage is per-WORKSPACE, so clearing on
-    // every per-conversation "+"/history switch would flicker it needlessly.
-    setUsage(null);
-    // Mark activation "checking" on a managed workspace so the footer shows
-    // neither composer nor pane until we know (#76); clear it otherwise.
-    setKeyMeta(billingEnabled && !!workspaceId ? undefined : null);
     // Defer SR announcements until the initial message list has loaded (#64).
     setBulkLoading(true);
     // Both async loads gate on the gen as well as `cancelled`: an in-flight
@@ -842,7 +757,6 @@ export function ChatPanel({
         });
     }
     void reloadConversationList(gen);
-    void refreshActivation(gen);
     return () => {
       cancelled = true;
       // Keep the anchor searchable on the way out. A note-less pane (library-wide
@@ -850,7 +764,7 @@ export function ChatPanel({
       // checkpoints anyway.
       if (noteId !== null) void ipc.chatReindexNote(noteId).catch(() => {});
     };
-  }, [target, workspaceId, billingEnabled, reloadConversationList, refreshActivation, resetTransient]);
+  }, [target, workspaceId, reloadConversationList, resetTransient]);
 
   // Persist a breadth change to the conversation (issue #58): update the chip
   // optimistically, then write it through so the next turn reads the new value.
@@ -894,16 +808,6 @@ export function ChatPanel({
     void ipc.chatSetPin(target, conversationId, kind, next).catch((e) => setError(String(e)));
   }
 
-  // Owner activated chat from the pane (#76): the entry reports fresh metadata →
-  // flip to the composer WITHOUT a reload (BYOK is unmetered). Clear any prior
-  // activation error so the live pane starts clean.
-  function handleActivated(m: ChatKeyMeta) {
-    setKeyMeta(m);
-    setUsage(null);
-    setError(null);
-    setErrorReason(null);
-  }
-
   // Stream subscription. Bound once; cancelled-flag + claim keeps it StrictMode-
   // and async-listen-safe. Deltas/activity accepted only while our send is live.
   useEffect(() => {
@@ -933,7 +837,6 @@ export function ChatPanel({
     onChatError((e) => {
       if (sendingRef.current) {
         setError(e.message);
-        setErrorReason(e.reason ?? null);
       }
     }).then(claim);
     return () => {
@@ -959,7 +862,7 @@ export function ChatPanel({
       hasAutoFocusedRef.current = true;
       inputRef.current.focus();
     }
-  }, [paneUsable, notActivated, activationLoading]);
+  }, [paneUsable]);
 
   // Grow the composer with the text. `rows={1}` sets the floor and `max-h-40` the
   // ceiling, but nothing in between: without this a wrapped question scrolls
@@ -1089,16 +992,9 @@ export function ChatPanel({
       // A first turn creates the conversation and bumps message counts — refresh
       // the list so the history popover + its visibility rule stay current (#62).
       void reloadConversationList(gen);
-      // A completed turn consumes allowance — refresh the meter (#69).
-      void refreshActivation(gen);
     } catch (e) {
       if (gen !== switchGenRef.current) return;
       setError((prev) => prev ?? String(e));
-      // Authoritative activation fallback (#76): a send can fail with
-      // chat_not_activated if the proactive check was stale — re-detect so the
-      // pane flips in. (byok_* failures leave the key configured, so this stays
-      // on the live pane and the error copy shows instead.)
-      void refreshActivation(gen);
       try {
         // A first turn sent from a draft may have CREATED the conversation before
         // failing: the backend persists the user message, then drops only the
@@ -1207,7 +1103,7 @@ export function ChatPanel({
   const showTyping = sending && streaming.length === 0 && !activity;
 
   // Role-aware BYOK error copy when we have the reason; else the server message.
-  const errorView = liveChatErrorCopy(errorReason, { isOwner, ownerName }) ?? error;
+  const errorView = error;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -1308,7 +1204,7 @@ export function ChatPanel({
         )}
       </div>
 
-      {!notActivated && errorView && (
+      {errorView && (
         <div
           className={cn(
             "mb-2 flex items-start gap-2 rounded-[var(--radius)] bg-[var(--color-accent-soft)] px-3 py-2 text-xs text-[var(--color-accent-text)]",
@@ -1330,28 +1226,7 @@ export function ChatPanel({
         </div>
       )}
 
-      {activationLoading ? (
-        <div
-          className={cn(
-            "shrink-0 p-4 text-sm text-[var(--color-text-muted)]",
-            onPage ? "" : "border-t border-[var(--color-line)]",
-          )}
-        >
-          Checking chat activation…
-        </div>
-      ) : notActivated ? (
-        <ActivationPane
-          // Remount on workspace switch so the entry draft is destroyed
-          // synchronously — belt-and-suspenders draft isolation (#76).
-          key={workspaceId as string}
-          workspaceId={workspaceId as string}
-          isOwner={isOwner}
-          ownerName={ownerName}
-          addon={addon}
-          onActivated={handleActivated}
-        />
-      ) : (
-      <div
+<div
         className={cn(
           "relative shrink-0 p-2.5 flex flex-col gap-1.5",
           // On the page the composer is its own rounded box — the Codex/Claude
@@ -1548,71 +1423,9 @@ export function ChatPanel({
               </span>
             )}
           </div>
-          {usage && (
-            <span
-              className={cn(
-                "text-xs tabular-nums",
-                // Colour-only status by fraction consumed (#69) — AAA on the
-                // panel surface in both themes. Size/weight unchanged.
-                {
-                  default: "text-[var(--color-text-muted)]",
-                  warning: "text-[var(--color-status-warning)]",
-                  danger: "text-[var(--color-status-danger)]",
-                }[usageTone(usage.used, usage.cap)],
-              )}
-            >
-              {usage.used}/{usage.cap} turns
-            </span>
-          )}
+
         </div>
       </div>
-      )}
-    </div>
-  );
-}
-
-// Role-aware activation pane for an unactivated workspace (#76). Replaces the
-// composer while history stays readable above. Owner: a values-first line + the
-// shared key entry (+ the managed add-on as the alternative when the server
-// offers it). Member: nothing actionable, just who to ask. The privacy line
-// respects the PRD claim boundary — "your OpenAI relationship", not "we can't
-// see your data".
-function ActivationPane({
-  workspaceId,
-  isOwner,
-  ownerName,
-  addon,
-  onActivated,
-}: {
-  workspaceId: string;
-  isOwner: boolean;
-  ownerName: string;
-  addon: ChatAddon | null;
-  onActivated: (meta: ChatKeyMeta) => void;
-}) {
-  return (
-    <div className="shrink-0 border-t border-[var(--color-line)] p-4 flex flex-col gap-3">
-      {isOwner ? (
-        <>
-          <p className="text-sm leading-relaxed">
-            Turn on chat for this workspace with your own OpenAI key — your team's chat runs on your
-            OpenAI relationship, free and unmetered.
-          </p>
-          <ChatKeyEntry workspaceId={workspaceId} onActivated={onActivated} />
-          {addon?.available && (
-            <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
-              Prefer not to manage a key? The managed add-on
-              {addon.price_cents != null &&
-                ` (${formatSeatPrice(addon.price_cents, addon.currency)}/mo)`}{" "}
-              runs chat on Humla's key — set it up in Organization → Workspace chat.
-            </p>
-          )}
-        </>
-      ) : (
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Chat isn't activated for this workspace yet — ask {ownerName}.
-        </p>
-      )}
     </div>
   );
 }
@@ -1969,15 +1782,14 @@ function SpeakerPinInput({
     let cancelled = false;
     void Promise.all([
       ipc.speakerLabelStats().catch(() => []),
-      ipc.speakerRoster().catch(() => [] as string[]),
-    ]).then(([stats, roster]) => {
+    ]).then(([stats]) => {
       // A backend that doesn't know the command resolves with null rather than
       // rejecting, which `.catch` would miss. Suggestions are an enhancement, so
       // a bad shape must not take the composer down with it.
       if (!cancelled) {
         setSuggestions({
           stats: Array.isArray(stats) ? stats : [],
-          roster: Array.isArray(roster) ? roster : [],
+          roster: [],
         });
       }
     });

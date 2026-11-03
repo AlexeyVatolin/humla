@@ -1,0 +1,67 @@
+name: Sync upstream release and publish
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+  push:
+    branches: [local]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'AlexeyVatolin/humla'
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      UPSTREAM_REPOSITORY: michaelwilhelmsen/humla
+      UPSTREAM_GIT_URL: https://github.com/michaelwilhelmsen/humla.git
+      FORK_BRANCH: local
+      RELEASE_BASE_URL: https://github.com/${{ github.repository }}/releases
+      CARGO_BUILD_JOBS: 2
+      CMAKE_BUILD_PARALLEL_LEVEL: 2
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: local
+          fetch-depth: 0
+      - name: Merge latest stable upstream release
+        id: upstream
+        run: bash scripts/sync-upstream.sh
+      - uses: pnpm/action-setup@v6.1.1
+        with:
+          version: 10
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.94.0'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - run: pnpm install --frozen-lockfile
+      - name: Prepare fork version
+        env:
+          UPSTREAM_TAG: ${{ steps.upstream.outputs.tag }}
+        run: node scripts/prepare-fork-release.mjs
+      - run: pnpm test
+      - name: Build sidecars and test backend
+        run: bash scripts/prepare-fork-build.sh
+      - name: Build signed update and installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        run: bash scripts/build-fork-release.sh
+      - name: Publish release
+        env:
+          SOURCE_COMMIT: ${{ steps.upstream.outputs.commit }}
+        run: bash scripts/publish-fork-release.sh

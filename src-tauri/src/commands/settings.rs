@@ -4,7 +4,7 @@
 use super::err;
 use crate::db;
 use crate::AppState;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub fn settings_get(state: State<AppState>, key: String) -> Result<Option<String>, String> {
@@ -13,7 +13,10 @@ pub fn settings_get(state: State<AppState>, key: String) -> Result<Option<String
 }
 
 #[tauri::command]
-pub fn settings_set(state: State<AppState>, key: String, value: String) -> Result<(), String> {
-    let conn = state.db.lock();
-    db::set_setting(&conn, &key, &value).map_err(err)
+pub fn settings_set(app: AppHandle, state: State<AppState>, key: String, value: String) -> Result<(), String> {
+    db::set_setting(&state.db.lock(), &key, &value).map_err(err)?;
+    if key == "zoom_meeting_prompt" {
+        crate::meeting_detection::set_enabled(&app, value != "false");
+    }
+    Ok(())
 }

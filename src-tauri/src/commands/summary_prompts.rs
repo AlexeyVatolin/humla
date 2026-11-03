@@ -12,7 +12,7 @@ pub fn summary_prompts_list(
     state: State<AppState>,
 ) -> Result<Vec<db::SummaryPrompt>, String> {
     let conn = state.db.lock();
-    let workspace = super::cloud::active_workspace(&conn);
+    let workspace = String::new();
     db::list_summary_prompts(&conn, &workspace).map_err(err)
 }
 
@@ -28,7 +28,7 @@ pub fn summary_prompts_create(
     }
     let prompt = {
         let conn = state.db.lock();
-        let workspace = super::cloud::active_workspace(&conn);
+        let workspace = String::new();
         db::create_summary_prompt(&conn, trimmed_name, &content, &workspace).map_err(err)?
     };
     state.sync.summary_prompt_upserted(&prompt.id);

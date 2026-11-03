@@ -139,7 +139,8 @@ export function ProviderConfigForm({
                       ? m.kind === "multilingual" ||
                         m.specificLanguage === filterLocalToLanguage
                       : m.kind === "multilingual"),
-                );
+                ) ?? localModels.find((m) => m.downloaded &&
+                  (!filterLocalToLanguage || m.specificLanguage === filterLocalToLanguage));
                 onChange({
                   provider: "local",
                   model_id: first?.id ?? "large-v3-turbo-q5",
@@ -171,7 +172,7 @@ export function ProviderConfigForm({
         <Row label="Model" description={MODEL_DESCRIPTIONS[provider]} control={modelSelect} />
       )}
 
-      {value.provider === "local" && (
+      {value.provider === "local" && value.model_id !== "gigaam-v3-e2e-rnnt" && (
         <>
           <Row
             label="Quality"

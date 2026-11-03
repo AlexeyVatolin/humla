@@ -17,9 +17,6 @@ import { CHAT_CAPABLE, SUMMARY_CAPABLE, type Provider } from "../../lib/provider
 // bookkeeping keys (owned by the wizard shell, never surfaced in Settings).
 export type EditableKey = Exclude<
   SettingsKey,
-  // `telemetry_enabled` is excluded for the same reason as theme/palette: it is
-  // owned by its own self-contained row (which must distinguish UNSET from "false"),
-  // not by the generic settings map, whose DEFAULTS would collapse that distinction.
   // `record_hotkey` is excluded on the same grounds: it is written through
   // `recordHotkeySet` (which registers it with the OS first and can fail), not
   // through the generic settings map.
@@ -27,7 +24,6 @@ export type EditableKey = Exclude<
   | "palette"
   | "onboarding_completed"
   | "onboarding_step"
-  | "telemetry_enabled"
   | "record_hotkey"
   // Owned by Home's offer card (src/lib/nemotronOffer.ts).
   | "nemotron_offer"
@@ -44,6 +40,7 @@ export const DEFAULTS: Record<EditableKey, string> = {
   transcribe_manually: "false",
   keep_awake: "true",
   close_to_tray: "false",
+  zoom_meeting_prompt: "true",
   sync_audio: "true",
   custom_vocabulary: "",
   summary_model: "gpt-5.4-mini",
@@ -76,7 +73,7 @@ export const PROVIDERS_BASE = [
 ];
 export const LOCAL_PROVIDER = {
   value: "local",
-  label: "Local (Whisper turbo, on-device)",
+  label: "Local (on-device)",
 };
 
 // How each capable provider is named in the two pickers. Which providers
@@ -164,17 +161,7 @@ export const ANTHROPIC_MODELS = [
 export const inputClass =
   "w-full px-3 py-2 rounded-md text-sm bg-[var(--color-input-bg)] border border-[var(--color-line)] focus:border-[var(--color-text-muted)]";
 
-/// Flash message shape. `info` is a plain text toast; `suggest_language_override`
-/// renders a one-click "Add as <language> override?" affordance after a
-/// language-specific model is downloaded.
-export type LocalFlash =
-  | { kind: "info"; message: string }
-  | {
-      kind: "suggest_language_override";
-      message: string;
-      language: string;
-      modelId: string;
-    };
+export type LocalFlash = { kind: "info"; message: string };
 
 export type LocalState = {
   // List of all known models with their per-id download status. Sourced

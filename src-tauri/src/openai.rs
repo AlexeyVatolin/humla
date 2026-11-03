@@ -238,6 +238,7 @@ pub async fn transcribe_file(
 struct ChatRequest<'a> {
     model: &'a str,
     messages: Vec<ChatMessage<'a>>,
+    enable_thinking: bool,
     // Reasoning models (gpt-5 and later + o-series) reject custom temperature
     // values with a 400 error; only the default (1) is allowed. Traditional
     // chat models (gpt-4o, gpt-4, gpt-3.5) accept it. `skip_serializing_if`
@@ -855,6 +856,7 @@ where
     let _ = on_chunk;
     let req = |max_tokens| ChatRequest {
         model,
+        enable_thinking: think,
         // Local OpenAI-compat servers accept temperature; reasoning-model
         // suppression only applies when the actual server is OpenAI's.
         temperature: if is_local || !is_reasoning_model(model) {
@@ -1303,6 +1305,8 @@ struct ToolChatRequest<'a> {
     temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    enable_thinking: Option<bool>,
 }
 
 /// Whether a failed request is OpenAI refusing function tools alongside the
@@ -1545,6 +1549,7 @@ pub(crate) async fn openai_chat_step<F>(
     model: &str,
     messages: &[Value],
     tools: &[Value],
+    enable_thinking: Option<bool>,
     on_delta: F,
 ) -> Result<(String, Vec<RawToolCall>)>
 where
@@ -1557,6 +1562,7 @@ where
         tools: if tools.is_empty() { None } else { Some(tools) },
         temperature: if is_reasoning_model(model) { None } else { Some(0.2) },
         max_tokens,
+        enable_thinking,
     };
     // `base_url` may be a local OpenAI-compat server, which needs the longer
     // timeout and its own failure vocabulary — `Endpoint` owns both.
@@ -1597,6 +1603,7 @@ where
         tools: if tools.is_empty() { None } else { Some(tools) },
         temperature: None,
         max_tokens: None,
+        enable_thinking: None,
     };
     let ep = Endpoint::Custom(base_url);
     let r = post_chat(&ep, api_key.unwrap_or(""), &req, std::time::Instant::now()).await?;
@@ -2350,7 +2357,7 @@ mod tests {
 
         async fn step(base: &str) -> Result<(String, Vec<RawToolCall>)> {
             let msgs = [json!({"role": "user", "content": "hei"})];
-            openai_chat_step(base, "", "gemma", &msgs, &[], |_| true).await
+            openai_chat_step(base, "", "gemma", &msgs, &[], None, |_| true).await
         }
 
         async fn summarize(base: &str) -> Result<String> {
@@ -2411,14 +2418,23 @@ data: [DONE]
 
         #[tokio::test]
         async fn a_local_summary_retries_without_the_ceiling_when_refused() {
-            let ok = json!({"choices":[{"finish_reason":"stop","message":{"content":"Referat"}}]});
-            let (port, server) = serve(vec![
-                (400, "application/json", "{}".into()),
-                (200, "application/json", ok.to_string()),
-            ])
-            .await;
-            assert_eq!(summarize(&base(port)).await.unwrap(), "Referat");
-            assert!(request_json(&server.await.unwrap()[1]).get("max_tokens").is_none());
+            for think in [false, true] {
+                let ok = json!({"choices":[{"finish_reason":"stop","message":{"content":"Referat"}}]});
+                let (port, server) = serve(vec![
+                    (400, "application/json", "{}".into()),
+                    (200, "application/json", ok.to_string()),
+                ])
+                .await;
+                let result = summarize_with_base(
+                    &base(port), "", "gemma", think, "sys", "transcript", |_| {},
+                ).await.unwrap();
+                assert_eq!(result, "Referat");
+                let seen = server.await.unwrap();
+                assert!(request_json(&seen[1]).get("max_tokens").is_none());
+                for request in seen {
+                    assert_eq!(request_json(&request)["enable_thinking"], think);
+                }
+            }
         }
     }
 

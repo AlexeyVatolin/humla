@@ -15,7 +15,7 @@ use tauri::State;
 #[tauri::command]
 pub fn clients_list(state: State<AppState>) -> Result<Vec<db::Client>, String> {
     let conn = state.db.lock();
-    let workspace = super::cloud::active_workspace(&conn);
+    let workspace = String::new();
     db::list_clients(&conn, &workspace).map_err(err)
 }
 
@@ -27,7 +27,7 @@ pub fn clients_create(state: State<AppState>, name: String) -> Result<db::Client
     }
     let client = {
         let conn = state.db.lock();
-        let workspace = super::cloud::active_workspace(&conn);
+        let workspace = String::new();
         db::create_client(&conn, trimmed, &workspace).map_err(err)?
     };
     state.sync.client_upserted(&client.id);

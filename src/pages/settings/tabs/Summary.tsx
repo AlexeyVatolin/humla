@@ -142,7 +142,7 @@ export function SummaryTab({
             </div>
             <Row
               label="Thinking mode"
-              description="Qwen 3+ reasons internally before answering — sometimes higher quality, but can take many minutes on a long meeting. Ollama only; other servers ignore it."
+              description="Let supported local models reason before answering. Applies to summaries and chat; longer meetings may take more time."
               control={
                 <Toggle
                   label="Enable thinking mode"

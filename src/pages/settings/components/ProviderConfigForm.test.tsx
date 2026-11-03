@@ -8,6 +8,22 @@ beforeEach(() => {
   mockTauri();
 });
 
+it("offers GigaAM as the default model without Whisper controls", async () => {
+  render(
+    <ProviderConfigForm
+      value={{ provider: "local", model_id: "gigaam-v3-e2e-rnnt", preset: "quality", use_gpu: true }}
+      onChange={vi.fn()}
+      localModels={[{
+        id: "gigaam-v3-e2e-rnnt", label: "GigaAM v3 E2E-RNN-T", kind: "language_specific",
+        specificLanguage: "ru", downloaded: true,
+      }]}
+    />,
+  );
+  expect(screen.getByRole("combobox", { name: "GigaAM v3 E2E-RNN-T" })).toBeInTheDocument();
+  expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+  expect(screen.queryByText("Quality")).not.toBeInTheDocument();
+});
+
 describe("ProviderConfigForm on a custom endpoint", () => {
   it("offers Custom, which starts with no model rather than a guessed one", async () => {
     const onChange = vi.fn();

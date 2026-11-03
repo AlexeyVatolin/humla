@@ -637,17 +637,22 @@ pub fn toggle_recording(app: &AppHandle) {
         if stopping {
             headless_stop(&app).await;
         } else {
-            headless_start(&app).await;
+            let _ = headless_start(&app).await;
         }
     });
 }
 
-async fn headless_start(app: &AppHandle) {
+pub(crate) fn can_start(app: &AppHandle) -> bool {
+    app.try_state::<MenuBar>()
+        .is_some_and(|mb| tray_menu_state(*mb.phase.lock()).start_enabled)
+}
+
+pub(crate) async fn headless_start(app: &AppHandle) -> Result<(), String> {
     let note = match create_headless_note(app) {
         Ok(note) => note,
         Err(e) => {
             notify(app, "Couldn't start recording", &e);
-            return;
+            return Err(e);
         }
     };
     // Remember the note before starting: a start that fails still needs to be
@@ -668,7 +673,9 @@ async fn headless_start(app: &AppHandle) {
         // revoked mic permission or a missing key/model normally surfaces as an
         // in-app toast, and there is no app on screen to show one.
         notify(app, "Couldn't start recording", &e);
+        return Err(e);
     }
+    Ok(())
 }
 
 async fn headless_stop(app: &AppHandle) {
@@ -699,7 +706,7 @@ fn create_headless_note(app: &AppHandle) -> Result<(String, String), String> {
             .map_err(|e| format!("{e}"))?
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| "meeting".to_string());
-        let workspace = crate::commands::cloud::active_workspace(&conn);
+        let workspace = String::new();
         let note =
             db::create_note(&conn, &language, &preset, &workspace).map_err(|e| format!("{e}"))?;
         db::update_note(
@@ -761,6 +768,9 @@ pub fn is_replaceable_title(title: &str) -> bool {
 /// Reflect a recording phase in the tray, and close the loop on a headless
 /// recording once its post-stop chain has finished.
 pub fn on_phase(app: &AppHandle, phase: Phase) {
+    if phase != Phase::Idle {
+        crate::meeting_detection::dismiss(app);
+    }
     let Some(mb) = app.try_state::<MenuBar>() else { return };
     *mb.phase.lock() = phase;
     let want = tray_menu_state(phase);

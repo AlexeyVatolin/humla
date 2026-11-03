@@ -34,6 +34,7 @@ else
 fi
 
 ./scripts/build-sidecar.sh
+bash ./scripts/build-gigaam.sh
 ./scripts/build-metallib.sh
 # The MCP server (#172) ships inside the bundle as an externalBin, so it must
 # exist before `tauri build` runs or the bundler fails on a missing sidecar.
@@ -67,6 +68,12 @@ if [[ -n "${APPLE_API_KEY:-}" ]]; then
     xcrun stapler validate "$DMG"
   fi
 fi
+
+for previous in "$OUT_DIR"/*.dmg; do
+  if [[ "$previous" != "$DMG" ]]; then
+    rm -f -- "$previous" "$previous.sig"
+  fi
+done
 
 echo
 echo "DMG ready: $DMG"
