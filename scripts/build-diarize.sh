@@ -8,7 +8,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-ARCH=$(uname -m)
+ARCH=${BUILD_ARCH:-$(uname -m)}
 case "$ARCH" in
   arm64)  TRIPLE="aarch64-apple-darwin" ;;
   x86_64) TRIPLE="x86_64-apple-darwin" ;;
@@ -44,10 +44,10 @@ fi
 
 (
   cd speaker-diarize
-  swift build -c release
+  swift build -c release --arch "$ARCH"
 )
 
-cp speaker-diarize/.build/release/speaker-diarize "$DEST"
+cp "speaker-diarize/.build/$ARCH-apple-macosx/release/speaker-diarize" "$DEST"
 chmod +x "$DEST"
 
 xattr -cr "$DEST" || true

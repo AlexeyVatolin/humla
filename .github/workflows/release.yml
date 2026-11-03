@@ -17,7 +17,7 @@ concurrency:
 jobs:
   release:
     if: github.repository == 'AlexeyVatolin/humla'
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 60
     env:
       GH_TOKEN: ${{ github.token }}
@@ -28,6 +28,8 @@ jobs:
       CARGO_BUILD_JOBS: 2
       CMAKE_BUILD_PARALLEL_LEVEL: 2
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      BUILD_TARGET: aarch64-apple-darwin
+      BUNDLE_DIR: src-tauri/target/aarch64-apple-darwin/release/bundle
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -46,6 +48,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: '1.94.0'
+          targets: aarch64-apple-darwin
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
@@ -61,6 +64,7 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+          BUILD_ARCH: arm64
         run: bash scripts/build-fork-release.sh
       - name: Publish release
         env:

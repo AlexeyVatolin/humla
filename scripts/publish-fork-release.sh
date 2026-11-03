@@ -9,8 +9,8 @@ git push --atomic origin "${SOURCE_COMMIT:?}:refs/heads/${FORK_BRANCH:?}" "refs/
 
 gh release create "$TAG" --draft --title "Humla $RELEASE_VERSION" \
   --notes 'Russian transcription, local AI and Zoom meeting reminders.' \
-  "src-tauri/target/release/bundle/dmg/Humla_${RELEASE_VERSION}_aarch64.dmg" \
-  src-tauri/target/release/bundle/macos/Humla.app.tar.gz \
-  src-tauri/target/release/bundle/macos/Humla.app.tar.gz.sig \
-  src-tauri/target/release/bundle/latest.json
+  "${BUNDLE_DIR:?}/dmg/Humla_${RELEASE_VERSION}_aarch64.dmg" \
+  "$BUNDLE_DIR/macos/Humla.app.tar.gz" \
+  "$BUNDLE_DIR/macos/Humla.app.tar.gz.sig" \
+  "$BUNDLE_DIR/latest.json"
 gh release edit "$TAG" --draft=false --latest

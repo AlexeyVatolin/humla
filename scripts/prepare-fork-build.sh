@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-test "$(uname -m)" = arm64
-
 bash scripts/build-sidecar.sh
 bash scripts/build-diarize.sh
 bash scripts/build-gigaam.sh

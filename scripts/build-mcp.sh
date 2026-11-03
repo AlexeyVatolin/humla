@@ -12,7 +12,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-ARCH=$(uname -m)
+ARCH=${BUILD_ARCH:-$(uname -m)}
 case "$ARCH" in
   arm64)  TRIPLE="aarch64-apple-darwin" ;;
   x86_64) TRIPLE="x86_64-apple-darwin" ;;
@@ -39,10 +39,10 @@ fi
 
 (
   cd src-tauri
-  cargo build --release --bin humla-mcp
+  cargo build --release --bin humla-mcp --target "$TRIPLE"
 )
 
-cp src-tauri/target/release/humla-mcp "$DEST"
+cp "src-tauri/target/$TRIPLE/release/humla-mcp" "$DEST"
 # Past the only failure that could leave a placeholder behind.
 trap - EXIT
 chmod +x "$DEST"

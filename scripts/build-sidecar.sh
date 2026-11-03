@@ -13,7 +13,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-ARCH=$(uname -m)
+ARCH=${BUILD_ARCH:-$(uname -m)}
 case "$ARCH" in
   arm64)  TRIPLE="aarch64-apple-darwin" ;;
   x86_64) TRIPLE="x86_64-apple-darwin" ;;
@@ -53,10 +53,10 @@ fi
 
 (
   cd audio-capture
-  swift build -c release
+  swift build -c release --arch "$ARCH"
 )
 
-cp audio-capture/.build/release/audio-capture "$DEST"
+cp "audio-capture/.build/$ARCH-apple-macosx/release/audio-capture" "$DEST"
 chmod +x "$DEST"
 
 xattr -cr "$DEST" || true

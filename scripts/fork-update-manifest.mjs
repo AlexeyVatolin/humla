@@ -2,7 +2,9 @@ import fs from "node:fs";
 
 const { RELEASE_VERSION: version, RELEASE_BASE_URL: base } = process.env;
 if (!version || !base) throw new Error("Release version and URL are required.");
-const payload = "src-tauri/target/release/bundle/macos/Humla.app.tar.gz";
+const bundle = process.env.BUNDLE_DIR;
+if (!bundle) throw new Error("Bundle directory is required.");
+const payload = `${bundle}/macos/Humla.app.tar.gz`;
 const manifest = {
   version,
   notes: `Humla ${version}`,
@@ -15,4 +17,4 @@ const manifest = {
   },
 };
 if (!fs.statSync(payload).size) throw new Error("Empty updater payload.");
-fs.writeFileSync("src-tauri/target/release/bundle/latest.json", `${JSON.stringify(manifest, null, 2)}\n`);
+fs.writeFileSync(`${bundle}/latest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
