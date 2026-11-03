@@ -9,6 +9,8 @@ import { useNotesStore, useRecordingStore } from "../lib/store";
 import { useCloudStore } from "../lib/cloud";
 import type { Folder, Note } from "../lib/ipc";
 
+let noteTimestamp = Date.now();
+
 // Notes all created "now" so they land in the same "Today" group and render in
 // insertion order — which fixes the visual order that shift-range relies on.
 function makeNote(id: string, title: string): Note {
@@ -25,8 +27,8 @@ function makeNote(id: string, title: string): Note {
     summary_provider: "",
     expected_speakers: null,
     detected_language: null,
-    created_at: Date.now(),
-    updated_at: Date.now(),
+    created_at: noteTimestamp,
+    updated_at: noteTimestamp,
     owner: "",
     workspace_id: "",
     private: false,
@@ -49,6 +51,7 @@ function renderAll() {
 const loc = () => screen.getByTestId("location").textContent;
 
 beforeEach(() => {
+  noteTimestamp = Date.now();
   useNotesStore.setState({ notes: [], folders: [], clients: [], recordedNoteIds: new Set() });
   useRecordingStore.setState({ errors: [] });
 });
