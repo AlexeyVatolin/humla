@@ -267,6 +267,10 @@ pub(crate) fn write_note_audio(sources: &[PathBuf], format: AudioFormat, dest: &
         AudioFormat::Wav => wav,
         AudioFormat::M4a => {
             let m4a = scratch.0.join("audio.m4a");
+            #[cfg(target_os = "windows")]
+            humla_windows::export::m4a(&wav, &m4a).map_err(|error| format!("convert audio to M4A: {error:#}"))?;
+            #[cfg(not(target_os = "windows"))]
+            {
             let result = std::process::Command::new("/usr/bin/afconvert")
                 .args(["-f", "m4af", "-d", "aac"])
                 .arg(&wav)
@@ -276,6 +280,7 @@ pub(crate) fn write_note_audio(sources: &[PathBuf], format: AudioFormat, dest: &
             if !result.status.success() {
                 let stderr = String::from_utf8_lossy(&result.stderr);
                 return Err(format!("convert audio to M4A: {}", stderr.trim()));
+            }
             }
             m4a
         }

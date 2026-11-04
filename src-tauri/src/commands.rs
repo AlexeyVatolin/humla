@@ -68,7 +68,10 @@ pub(crate) const DEFAULT_LANGUAGE: &str = "no";
 // The diarization engine when `diarize_model` is unset. Only a fresh install
 // has no row, since `db::migrate_diarize_engine` writes one for every other.
 // Mirrored by `DEFAULT_DIARIZE_ENGINE` in `src/lib/diarizeEngine.ts`.
+#[cfg(not(target_os = "windows"))]
 const DEFAULT_DIARIZE_MODEL: &str = "nemotron3";
+#[cfg(target_os = "windows")]
+const DEFAULT_DIARIZE_MODEL: &str = "windows";
 
 // Matches the sidecar's own default. Stored as a string and parsed at use.
 const DEFAULT_COMMUNITY1_THRESHOLD: &str = "0.5";
@@ -2476,6 +2479,13 @@ fn read_diarize_thresholds(state: &State<AppState>) -> diarize::Thresholds {
     diarize::Thresholds { community1_clustering }
 }
 
+fn stop_capture_process(pid: u32) {
+    #[cfg(unix)]
+    unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+    #[cfg(target_os = "windows")]
+    let _ = humla_windows::capture::signal(pid, humla_windows::capture::Signal::Stop);
+}
+
 #[tauri::command]
 pub fn recording_pause(state: State<AppState>) -> Result<(), String> {
     let s = state.recording.lock();
@@ -2487,6 +2497,8 @@ pub fn recording_pause(state: State<AppState>) -> Result<(), String> {
             return Err(format!("kill: {}", std::io::Error::last_os_error()));
         }
     }
+    #[cfg(target_os = "windows")]
+    humla_windows::capture::signal(pid as u32, humla_windows::capture::Signal::Pause).map_err(err)?;
     Ok(())
 }
 
@@ -2501,6 +2513,8 @@ pub fn recording_resume(state: State<AppState>) -> Result<(), String> {
             return Err(format!("kill: {}", std::io::Error::last_os_error()));
         }
     }
+    #[cfg(target_os = "windows")]
+    humla_windows::capture::signal(pid as u32, humla_windows::capture::Signal::Resume).map_err(err)?;
     Ok(())
 }
 
@@ -2568,10 +2582,7 @@ pub async fn recording_start(
     };
     if let Some(mut c) = stale_child {
         if let Some(pid) = c.id() {
-            #[cfg(unix)]
-            unsafe {
-                libc::kill(pid as i32, libc::SIGTERM);
-            }
+            stop_capture_process(pid);
         }
         let _ = tokio::time::timeout(std::time::Duration::from_secs(2), c.wait()).await;
         let _ = c.kill().await;
@@ -2638,6 +2649,11 @@ pub async fn recording_start(
     let sidecar_path = sidecar_path(&app)?;
     let mut cmd = Command::new(&sidecar_path);
     cmd.arg("--out").arg(&temp_dir);
+    #[cfg(target_os = "windows")]
+    {
+        cmd.stdin(Stdio::piped()).creation_flags(0x08000000);
+        cmd.arg("--exclude-pid").arg(std::process::id().to_string());
+    }
     if keep_awake_enabled(&app) {
         cmd.arg("--keep-awake");
     }
@@ -2857,8 +2873,7 @@ pub async fn recording_stop(
         // safety margin so SIGKILL never truncates emitted-but-unread
         // chunk events.
         if let Some(pid) = child.id() {
-            #[cfg(unix)]
-            unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+            stop_capture_process(pid);
         }
         let waited = tokio::time::timeout(std::time::Duration::from_secs(8), child.wait()).await;
         if waited.is_err() {
@@ -3838,8 +3853,7 @@ pub async fn import_audio(
     };
     if let Some(mut c) = stale_child {
         if let Some(pid) = c.id() {
-            #[cfg(unix)]
-            unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+            stop_capture_process(pid);
         }
         let _ = tokio::time::timeout(std::time::Duration::from_secs(2), c.wait()).await;
         let _ = c.kill().await;
@@ -3901,6 +3915,8 @@ pub async fn import_audio(
     let mut cmd = Command::new(&sidecar_path);
     cmd.arg("--import").arg(&source_path);
     cmd.arg("--out").arg(&temp_dir);
+    #[cfg(target_os = "windows")]
+    cmd.stdin(Stdio::piped()).creation_flags(0x08000000);
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
     cmd.kill_on_drop(true);
@@ -4437,6 +4453,8 @@ async fn replay_retained_stream(
     let mut cmd = Command::new(&sidecar);
     cmd.arg("--import").arg(wav);
     cmd.arg("--out").arg(&temp_dir);
+    #[cfg(target_os = "windows")]
+    cmd.stdin(Stdio::piped()).creation_flags(0x08000000);
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
     cmd.kill_on_drop(true);
@@ -7505,6 +7523,7 @@ fn sidecar_path(_app: &AppHandle) -> Result<PathBuf, String> {
         if let Some(dir) = exe.parent() {
             let candidates = [
                 dir.join("audio-capture"),
+                dir.join("audio-capture.exe"),
                 dir.join("audio-capture-aarch64-apple-darwin"),
                 dir.join("audio-capture-x86_64-apple-darwin"),
             ];
@@ -7518,10 +7537,11 @@ fn sidecar_path(_app: &AppHandle) -> Result<PathBuf, String> {
 
     // 2) Dev (`tauri dev`): the binary lives under src-tauri/binaries/.
     if let Ok(cwd) = std::env::current_dir() {
-        for triple in ["aarch64-apple-darwin", "x86_64-apple-darwin"] {
-            let p = cwd.join(format!("src-tauri/binaries/audio-capture-{triple}"));
+        for triple in ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"] {
+            let suffix = std::env::consts::EXE_SUFFIX;
+            let p = cwd.join(format!("src-tauri/binaries/audio-capture-{triple}{suffix}"));
             if p.exists() { return Ok(p); }
-            let p = cwd.join(format!("binaries/audio-capture-{triple}"));
+            let p = cwd.join(format!("binaries/audio-capture-{triple}{suffix}"));
             if p.exists() { return Ok(p); }
         }
     }

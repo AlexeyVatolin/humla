@@ -114,9 +114,9 @@ pub fn meeting_prompt_dismiss(app: AppHandle) {
 
 #[tauri::command]
 pub async fn meeting_prompt_start(app: AppHandle) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     let active = native::input_active();
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let active = false;
     if !ENABLED.load(Ordering::Relaxed) || !active {
         dismiss(&app);
@@ -135,8 +135,51 @@ pub fn install(app: &AppHandle) {
     let enabled = db::get_setting(&app.state::<AppState>().db.lock(), "zoom_meeting_prompt")
         .ok().flatten().as_deref() != Some("false");
     ENABLED.store(enabled, Ordering::Relaxed);
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     native::install(app);
+}
+
+#[cfg(target_os = "windows")]
+mod native {
+    use super::*;
+    static ACTIVE: AtomicBool = AtomicBool::new(false);
+
+    pub(super) fn input_active() -> bool { ACTIVE.load(Ordering::Acquire) }
+
+    pub(super) fn install(app: &AppHandle) {
+        let (sender, mut receiver) = mpsc::channel(1);
+        if EVENTS.set(sender).is_err() { return; }
+        humla_windows::meeting::watch(|active| {
+            ACTIVE.store(active, Ordering::Release);
+            if let Some(events) = EVENTS.get() { let _ = events.try_send(()); }
+        });
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let mut call = CallState::default();
+            loop {
+                tokio::select! {
+                    event = receiver.recv() => { if event.is_none() { break; } }
+                    _ = async {
+                        match call.deadline {
+                            Some(deadline) => tokio::time::sleep_until(deadline).await,
+                            None => std::future::pending::<()>().await,
+                        }
+                    } => {}
+                }
+                let enabled = ENABLED.load(Ordering::Relaxed);
+                let input = enabled && input_active();
+                if !input { dismiss(&app); }
+                if !enabled { call = CallState::default(); continue; }
+                if call.update(input, Instant::now()) == Some(true) && menubar::can_start(&app) {
+                    let onboarded = db::get_setting(&app.state::<AppState>().db.lock(), "onboarding_completed")
+                        .ok().flatten().as_deref() == Some("true");
+                    if onboarded {
+                        if let Err(error) = show_prompt(&app) { eprintln!("Zoom meeting prompt: {error}"); }
+                    }
+                }
+            }
+        });
+    }
 }
 
 #[cfg(target_os = "macos")]

@@ -22,6 +22,9 @@ const GITHUB_TEAM_ID: &str = "VEKTX9H2N7";
 
 /// The npm package for this Mac and its sha512, as the registry lists it.
 fn pinned(arch: &str) -> Option<(&'static str, &'static str)> {
+    if cfg!(target_os = "windows") {
+        return (arch == "x86_64").then_some(("copilot-win32-x64", "sha512-FbuPZK5CP+9oJlv7+gYiOOUbtwtO4AxcRfuzv9amYqfCbynkjVLdwhCdlY5++m37JAhjetix0sbVAtWHPlw42g=="));
+    }
     match arch {
         "aarch64" => Some((
             "copilot-darwin-arm64",
@@ -45,7 +48,7 @@ fn npm_arch(arch: &str) -> &str {
 
 /// Where Humla keeps a CLI it downloaded.
 pub fn managed_path(app_data: &Path) -> PathBuf {
-    app_data.join("copilot").join(VERSION).join("copilot")
+    app_data.join("copilot").join(VERSION).join(if cfg!(windows) { "copilot.exe" } else { "copilot" })
 }
 
 /// What the user's login shell knows: its PATH, and npm's global prefix, whose
@@ -94,6 +97,14 @@ pub fn candidates(
         push(p.to_path_buf());
     }
     push(managed.to_path_buf());
+    #[cfg(target_os = "windows")]
+    if let Some(search) = std::env::var_os("PATH") {
+        for directory in std::env::split_paths(&search) {
+            push(directory.join("copilot.exe"));
+            push(directory.join("node_modules/@github/copilot-win32-x64/copilot.exe"));
+            push(directory.join("node_modules/@github/copilot/node_modules/@github/copilot-win32-x64/copilot.exe"));
+        }
+    }
     for dir in [
         PathBuf::from("/opt/homebrew/bin"),
         PathBuf::from("/usr/local/bin"),
@@ -127,7 +138,7 @@ pub fn native_binary(path: &Path, arch: &str) -> Option<PathBuf> {
     let real = std::fs::canonicalize(path).ok()?;
     let mut head = [0u8; 4];
     std::fs::File::open(&real).ok()?.read_exact(&mut head).ok()?;
-    if MACH_O_MAGICS.contains(&head) {
+    if MACH_O_MAGICS.contains(&head) || (cfg!(windows) && head.starts_with(b"MZ")) {
         return Some(real);
     }
     if !head.starts_with(b"#!") {
@@ -167,15 +178,18 @@ pub fn extract_binary(tgz: &[u8], dest: &Path) -> anyhow::Result<()> {
     let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(tgz));
     for entry in archive.entries()? {
         let mut entry = entry?;
-        if entry.path()?.as_ref() == Path::new("package/copilot") {
+        if entry.path()?.as_ref() == Path::new(if cfg!(windows) { "package/copilot.exe" } else { "package/copilot" }) {
             let parent = dest.parent().context("destination has no parent")?;
             std::fs::create_dir_all(parent)?;
             let tmp = parent.join(".copilot.partial");
             let mut out = std::fs::File::create(&tmp)?;
             std::io::copy(&mut entry, &mut out)?;
             drop(out);
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))?;
+            }
             std::fs::rename(&tmp, dest)?;
             return Ok(());
         }
@@ -240,7 +254,7 @@ pub async fn download(
 ) -> anyhow::Result<PathBuf> {
     use futures_util::StreamExt;
     let (package, integrity) =
-        pinned(arch()).ok_or_else(|| anyhow!("Copilot isn't available for this Mac"))?;
+        pinned(arch()).ok_or_else(|| anyhow!("Copilot isn't available for this device"))?;
     let url = format!("https://registry.npmjs.org/@github/{package}/-/{package}-{VERSION}.tgz");
     let r = reqwest::Client::new()
         .get(&url)
@@ -267,12 +281,14 @@ pub async fn download(
         move || extract_binary(&bytes, &unverified)
     })
     .await??;
+    #[cfg(target_os = "macos")]
     verify_signature(&unverified).await?;
     std::fs::rename(&unverified, &dest)?;
     Ok(dest)
 }
 
 /// Refuse a binary GitHub didn't sign.
+#[cfg(target_os = "macos")]
 async fn verify_signature(binary: &Path) -> anyhow::Result<()> {
     let requirement = format!("=anchor apple generic and certificate leaf[subject.OU] = \"{GITHUB_TEAM_ID}\"");
     let status = tokio::process::Command::new("/usr/bin/codesign")

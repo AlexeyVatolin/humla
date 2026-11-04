@@ -33,13 +33,32 @@ async fn run_sidecar_cmd(app: &AppHandle, mode: &str) -> Result<String, String> 
 
 #[tauri::command]
 pub async fn permissions_status(app: AppHandle) -> Result<PermissionsStatus, String> {
+    #[cfg(target_os = "windows")]
+    return Ok(PermissionsStatus {
+        microphone: humla_windows::permissions::microphone().into(),
+        screen: "not_required".into(),
+    });
+    #[cfg(not(target_os = "windows"))]
+    {
     let stdout = run_sidecar_cmd(&app, "status").await?;
     let line = stdout.lines().last().unwrap_or("");
     serde_json::from_str(line).map_err(|e| format!("parse: {e}: {line}"))
+    }
 }
 
 #[tauri::command]
 pub async fn permissions_request(app: AppHandle, kind: String) -> Result<PermissionsStatus, String> {
+    #[cfg(target_os = "windows")]
+    {
+        if kind == "microphone" {
+            humla_windows::permissions::open_settings(&kind).map_err(|e| e.to_string())?;
+        } else if kind != "screen" {
+            return Err("unknown kind".into());
+        }
+        return permissions_status(app).await;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
     let mode = match kind.as_str() {
         "microphone" => "request-microphone",
         "screen" => "request-screen",
@@ -47,10 +66,15 @@ pub async fn permissions_request(app: AppHandle, kind: String) -> Result<Permiss
     };
     let _ = run_sidecar_cmd(&app, mode).await; // result ignored; we re-query
     permissions_status(app).await
+    }
 }
 
 #[tauri::command]
 pub async fn permissions_open_settings(kind: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    return humla_windows::permissions::open_settings(&kind).map_err(|e| e.to_string());
+    #[cfg(not(target_os = "windows"))]
+    {
     let url = match kind.as_str() {
         "microphone" => "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
         "screen" => "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
@@ -64,4 +88,5 @@ pub async fn permissions_open_settings(kind: String) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
+    }
 }

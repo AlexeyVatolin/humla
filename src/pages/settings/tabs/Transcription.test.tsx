@@ -23,7 +23,7 @@ function renderTab(def: ProviderConfig, overrides: Partial<Record<EditableKey, s
       local={EMPTY_LOCAL_STATE}
       downloadModel={vi.fn()}
       deleteModel={vi.fn()}
-      diarize={{ nemotron3: EMPTY_DIARIZE_STATE, community1: EMPTY_DIARIZE_STATE }}
+      diarize={{ nemotron3: EMPTY_DIARIZE_STATE, community1: EMPTY_DIARIZE_STATE, windows: EMPTY_DIARIZE_STATE }}
       downloadDiarize={vi.fn()}
       deleteDiarize={vi.fn()}
     />,

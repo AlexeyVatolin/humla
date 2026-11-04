@@ -5,8 +5,20 @@ mod keychain;
 mod openai;
 mod anthropic;
 mod copilot;
+#[cfg(not(target_os = "windows"))]
 mod local_whisper;
+#[cfg(target_os = "windows")]
+#[path = "local_windows.rs"]
+mod local_whisper;
+#[cfg(not(target_os = "windows"))]
 mod local_gigaam;
+#[cfg(target_os = "windows")]
+mod local_gigaam {
+    pub const MODEL_ID: &str = humla_windows::models::GIGAAM_MODEL_ID;
+    pub fn is_model(path: &std::path::Path) -> bool {
+        path.file_name().is_some_and(|name| name == MODEL_ID)
+    }
+}
 mod diarize;
 mod echo;
 mod languages;
@@ -118,7 +130,7 @@ where
         // argument is how `menubar::present_at_launch` recognises the launch.
         .plugin(
             tauri_plugin_autostart::Builder::new()
-                .app_name("no.humla.app")
+                .app_name(if cfg!(target_os = "windows") { "Humla" } else { "no.humla.app" })
                 .arg(menubar::LOGIN_LAUNCH_ARG)
                 .build(),
         )
@@ -156,6 +168,7 @@ where
             // of plausible locations and log whichever wins so a
             // missing metallib is visible in stderr instead of just
             // silently degrading to BLAS.
+            #[cfg(target_os = "macos")]
             if let Ok(resource_dir) = app.path().resource_dir() {
                 let candidates = [
                     resource_dir.clone(),
@@ -535,13 +548,18 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         true,
         None::<&str>,
     )?;
-    let services = PredefinedMenuItem::services(app, None)?;
-    let hide = PredefinedMenuItem::hide(app, None)?;
-    let hide_others = PredefinedMenuItem::hide_others(app, None)?;
-    let show_all = PredefinedMenuItem::show_all(app, None)?;
     let quit = PredefinedMenuItem::quit(app, None)?;
     let sep = || PredefinedMenuItem::separator(app);
 
+    #[cfg(target_os = "macos")]
+    let services = PredefinedMenuItem::services(app, None)?;
+    #[cfg(target_os = "macos")]
+    let hide = PredefinedMenuItem::hide(app, None)?;
+    #[cfg(target_os = "macos")]
+    let hide_others = PredefinedMenuItem::hide_others(app, None)?;
+    #[cfg(target_os = "macos")]
+    let show_all = PredefinedMenuItem::show_all(app, None)?;
+    #[cfg(target_os = "macos")]
     let app_submenu = Submenu::with_items(
         app,
         &app_name,
@@ -560,6 +578,8 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &quit,
         ],
     )?;
+    #[cfg(not(target_os = "macos"))]
+    let app_submenu = Submenu::with_items(app, &app_name, true, &[&about, &check_for_updates, &sep()?, &quit])?;
 
     let edit_submenu = Submenu::with_items(
         app,

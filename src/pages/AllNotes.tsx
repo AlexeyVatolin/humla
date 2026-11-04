@@ -1,3 +1,4 @@
+import { primaryModifier } from "../lib/platform";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
@@ -189,7 +190,7 @@ export function AllNotes() {
                 className="px-2 py-0.5 border border-[var(--color-line-visible)] rounded text-xs"
                 style={{ fontFamily: "var(--font-code)" }}
               >
-                ⌘N
+                {primaryModifier}N
               </kbd>
               <span>to start a new note</span>
             </div>

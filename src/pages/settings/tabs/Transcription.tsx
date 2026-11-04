@@ -14,6 +14,7 @@ import { KEY_ONLY_PROVIDERS } from "../../../lib/providers";
 import { LANGUAGES, languageOptionLabel } from "../../../lib/languages";
 import { inputClass } from "../types";
 import type { SettingsHook } from "../useSettings";
+import { isWindows } from "../../../lib/platform";
 
 // The selected cloud provider's key card renders right under the picker;
 // the others sit in Advanced so keys for override-only providers stay
@@ -230,9 +231,17 @@ export function TranscriptionTab({
       <Section title="Speaker labels">
         <p className="text-xs text-[var(--color-text-muted)] py-3">
           After a recording stops, each voice in it is labelled{" "}
-          <code>Speaker 1:</code>, <code>Speaker 2:</code> and so on. Both
-          engines run on your Mac, on the Neural Engine.
+          <code>Speaker 1:</code>, <code>Speaker 2:</code> and so on.{" "}
+          {isWindows ? "Speaker identification runs locally with DirectML." : "Both engines run on your Mac, on the Neural Engine."}
         </p>
+        {isWindows ? (
+          <DiarizeModelManager
+            state={diarize.windows}
+            cost="Pyannote segmentation and WeSpeaker voice embeddings. About 33 MB."
+            onDownload={() => downloadDiarize("windows")}
+            onDelete={() => deleteDiarize("windows")}
+          />
+        ) : <>
         <EngineOption
           label="Nemotron 3 (end-to-end)"
           description={`NVIDIA Nemotron 3. Up to ${NEMOTRON_MAX_SPEAKERS} speakers, counts them itself. A note whose speaker count is set above ${NEMOTRON_MAX_SPEAKERS} uses Community-1 instead.`}
@@ -268,7 +277,9 @@ export function TranscriptionTab({
             onDelete={() => deleteDiarize("community1")}
           />
         </EngineOption>
+        </>}
         <Disclosure label="Advanced">
+          {!isWindows &&
           <ThresholdRow
             label="Community-1 clustering threshold"
             description="Higher = more aggressive separation (more speakers); lower = more merging. Default 0.5. Community-1 only."
@@ -276,6 +287,7 @@ export function TranscriptionTab({
             placeholder="0.5"
             onChange={(v) => update("community1_threshold", v)}
           />
+          }
           <ThresholdRow
             label="Silence RMS threshold"
             description="Chunks quieter than this are skipped before Whisper sees them — prevents hallucinations on near-silence and mic hiss; too high and quiet speech gets cut. Default 0.008 (pure silence ≈ 0.0001, room tone ≈ 0.001, soft speech ≈ 0.01+)."

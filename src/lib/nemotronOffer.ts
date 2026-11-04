@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { selectedDiarizeEngine } from "./diarizeEngine";
 import { ipc, onDiarizeDownloadProgress, type DiarizeDownloadProgress } from "./ipc";
 import { writeSetting } from "./settingsBus";
+import { isWindows } from "./platform";
 
 // The offer to switch to Nemotron 3 that an upgraded install gets: the upgrade
 // kept it on community-1 and stored the offer as pending. Held outside React
@@ -24,6 +25,7 @@ const busy = () => current().stage === "downloading" || current().stage === "don
 const writeOffer = (value: OfferSetting) => writeSetting("nemotron_offer", value);
 
 export async function loadNemotronOffer(): Promise<void> {
+  if (isWindows) return;
   if (busy()) return;
   const [offer, engine] = await Promise.all([
     ipc.getSetting("nemotron_offer").catch(() => null),

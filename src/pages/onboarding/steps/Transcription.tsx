@@ -54,6 +54,7 @@ import { useProviderKey } from "../../../components/provider/useProviderKey";
 import type { StepContext } from "../types";
 import { StepShell } from "../StepShell";
 import { Select } from "../../../components/ui/Select";
+import { isWindows } from "../../../lib/platform";
 
 // ---- Model routing (mirrors design/ONBOARDING.md § 4) ---------------------
 const NB_MODEL_ID = "nb-whisper-large-q5";
@@ -63,7 +64,7 @@ const DEFAULT_MODEL_ID = "large-v3-turbo-q5";
 function modelIdForLanguage(language: string | null): string {
   const l = (language ?? "").toLowerCase();
   if (l === "ru") return RU_MODEL_ID;
-  return l === "no" || l === "nb" || l === "nn" ? NB_MODEL_ID : DEFAULT_MODEL_ID;
+  return !isWindows && (l === "no" || l === "nb" || l === "nn") ? NB_MODEL_ID : DEFAULT_MODEL_ID;
 }
 
 // The local ProviderConfig Settings writes — same preset + gpu defaults.
@@ -144,7 +145,7 @@ export function TranscriptionStep({ ctx }: { ctx: StepContext }) {
   const chosenModel = models?.find((m) => m.id === modelId) ?? null;
   const isNorwegian = modelId === NB_MODEL_ID;
   const isRussian = modelId === RU_MODEL_ID;
-  const isIntel = arch !== null && arch !== "aarch64";
+  const isIntel = !isWindows && arch !== null && arch !== "aarch64";
 
   // This step's slice of the global download state.
   const mine = activeDownload?.modelId === modelId ? activeDownload : null;
@@ -405,7 +406,7 @@ export function TranscriptionStep({ ctx }: { ctx: StepContext }) {
     <StepShell
       icon={<HardDriveDownload size={26} strokeWidth={1.6} />}
       title="How should Humla transcribe?"
-      subtitle="Run it privately on your Mac, or use a cloud API. You can change this any time in Settings."
+      subtitle={`Run it privately on your ${isWindows ? "PC" : "Mac"}, or use a cloud API. You can change this any time in Settings.`}
     >
       <div className="w-full max-w-md flex flex-col gap-3 text-left">
         {/* Card A — On-device */}

@@ -1,3 +1,5 @@
+import { systemSettingsName } from "../lib/platform";
+import { primaryModifier } from "../lib/platform";
 import { useEffect, useRef, useState } from "react";
 import { formatTime, useCaptureElapsed } from "../lib/captureClock";
 import { MicOff, Pause, Play, Square } from "lucide-react";
@@ -42,7 +44,7 @@ export function noAudioWarning(device?: string | null): string {
     chars.length > MAX_DEVICE_NAME
       ? `${chars.slice(0, MAX_DEVICE_NAME - 1).join("").trimEnd()}…`
       : name;
-  return `No audio from ${shown} — check your input device in System Settings`;
+  return `No audio from ${shown} — check your input device in ${systemSettingsName}`;
 }
 
 /**
@@ -658,7 +660,7 @@ export function RecordingBar({ noteId }: { noteId: string }) {
           <button
             onClick={recording ? pause : resume}
             className={cn("no-drag grid place-items-center w-[46px] border-l text-[var(--color-text)] transition-colors", ctrlEdge)}
-            title={recording ? "Pause (⌘R)" : "Resume (⌘R)"}
+            title={recording ? `Pause (${primaryModifier}R)` : `Resume (${primaryModifier}R)`}
             aria-label={recording ? "Pause" : "Resume"}
           >
             {recording

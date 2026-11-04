@@ -1,3 +1,4 @@
+import { isWindows } from "../lib/platform";
 // The `/chat` route (issue #95): chat's front door.
 //
 // Until now `ChatPanel` was mounted in exactly one place — the Chat tab of the
@@ -149,7 +150,7 @@ export function Chat({
         data-tauri-drag-region
         className={cn(
           "relative z-30 h-12 shrink-0 flex items-center gap-2 pr-3",
-          sidebarCollapsed ? "pl-[116px]" : "pl-3",
+          sidebarCollapsed ? (isWindows ? "pl-12" : "pl-[116px]") : "pl-3",
         )}
       >
         <span className="truncate text-[13.5px] font-medium" title={barTitle}>

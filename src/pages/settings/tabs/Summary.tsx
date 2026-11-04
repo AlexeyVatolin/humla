@@ -42,7 +42,7 @@ export function SummaryTab({
       <Section title="Summaries">
         <Row
           label="Provider"
-          description="Local keeps the transcript on your Mac — pick this for confidential meetings. The cloud providers (OpenAI, Anthropic, GitHub Copilot) are faster and produce better summaries, but send the transcript to them. Custom sends it to whichever OpenAI-compatible API you name."
+          description="Local keeps the transcript on your device — pick this for confidential meetings. The cloud providers (OpenAI, Anthropic, GitHub Copilot) are faster and produce better summaries, but send the transcript to them. Custom sends it to whichever OpenAI-compatible API you name."
           control={
             <Select
               value={s.summary_provider}
@@ -136,7 +136,7 @@ export function SummaryTab({
                 ariaLabel="Copy Ollama pull command"
               />
               <p className="text-xs text-[var(--color-text-muted)]">
-                On a 16 GB Mac use <code>ollama pull {RECOMMENDED_OLLAMA_MODEL_16GB}</code> instead —{" "}
+                With 16 GB RAM use <code>ollama pull {RECOMMENDED_OLLAMA_MODEL_16GB}</code> instead —{" "}
                 {RECOMMENDED_OLLAMA_MODEL} needs ~24 GB+; 9B and up will OOM during summary.
               </p>
             </div>

@@ -1,3 +1,4 @@
+import { credentialStoreName } from "../../lib/platform";
 import { useState } from "react";
 import { Pencil } from "lucide-react";
 import { Btn } from "../../pages/settings/components/Btn";
@@ -86,7 +87,7 @@ export function CustomEndpointCard({
       <div>
         <div className="text-sm">API key</div>
         <p className="text-xs text-[var(--color-text-muted)] mt-0.5 mb-2">
-          Optional, and kept in the Keychain. Sent as a bearer token; an endpoint that takes no
+          Optional, and kept in {credentialStoreName}. Sent as a bearer token; an endpoint that takes no
           key gets no Authorization header.
         </p>
         <div className="flex gap-2">

@@ -42,7 +42,7 @@ function TakeRow({ label, value, missing, total }: {
       <span className={missing ? "text-[var(--color-text-muted)]" : undefined}>{label}</span>
       <span
         className={"tabular-nums " + (missing ? "text-[var(--color-text-muted)]" : "")}
-        title={missing ? "Not stored on this Mac, so the file leaves it out" : undefined}
+        title={missing ? "Not stored on this device, so the file leaves it out" : undefined}
       >
         {value}
       </span>

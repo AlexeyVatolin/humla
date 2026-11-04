@@ -154,6 +154,7 @@ pub struct Thresholds {
 pub enum Engine {
     Community1,
     Nemotron3,
+    Windows,
 }
 
 /// The most speakers Nemotron 3 can tell apart.
@@ -162,6 +163,8 @@ pub const NEMOTRON_MAX_SPEAKERS: i64 = 8;
 impl Engine {
     pub fn parse(arg: &str) -> Option<Self> {
         match arg {
+            #[cfg(target_os = "windows")]
+            "windows" => Some(Engine::Windows),
             "community1" => Some(Engine::Community1),
             "nemotron3" => Some(Engine::Nemotron3),
             _ => None,
@@ -171,6 +174,7 @@ impl Engine {
     /// A stored value this build doesn't know reads as community-1. Mirrored by
     /// `selectedDiarizeEngine` in `src/lib/diarizeEngine.ts`.
     pub fn from_setting(s: &str) -> Self {
+        if cfg!(target_os = "windows") { return Engine::Windows; }
         Self::parse(s).unwrap_or(Engine::Community1)
     }
 
@@ -178,17 +182,19 @@ impl Engine {
         match self {
             Engine::Community1 => "community1",
             Engine::Nemotron3 => "nemotron3",
+            Engine::Windows => "windows",
         }
     }
 
     pub(crate) fn takes_speaker_hint(self) -> bool {
-        self == Engine::Community1
+        matches!(self, Engine::Community1 | Engine::Windows)
     }
 
     fn other(self) -> Self {
         match self {
             Engine::Community1 => Engine::Nemotron3,
             Engine::Nemotron3 => Engine::Community1,
+            Engine::Windows => Engine::Windows,
         }
     }
 
@@ -197,6 +203,7 @@ impl Engine {
         match self {
             Engine::Community1 => "Community-1",
             Engine::Nemotron3 => "Nemotron 3",
+            Engine::Windows => "Pyannote (DirectML)",
         }
     }
 
@@ -212,6 +219,7 @@ impl Engine {
         match self {
             Engine::Community1 => &COMMUNITY1_DEMOTED,
             Engine::Nemotron3 => &NEMOTRON_DEMOTED,
+            Engine::Windows => &COMMUNITY1_DEMOTED,
         }
     }
 
@@ -234,6 +242,7 @@ impl Engine {
 /// `enginesToDownload` in `src/lib/diarizeEngine.ts`, which fetches what this
 /// falls back to.
 pub fn engine_preference(selected: Engine, expected_speakers: Option<i64>) -> Vec<Engine> {
+    if selected == Engine::Windows { return vec![selected]; }
     let preferred = if expected_speakers.is_some_and(|n| n > NEMOTRON_MAX_SPEAKERS) {
         Engine::Community1
     } else {
@@ -310,6 +319,7 @@ fn retry_candidate(other: Candidate) -> Option<Engine> {
 }
 
 pub async fn retry_engine(app: &AppHandle, failed: Engine) -> Option<Engine> {
+    if failed == Engine::Windows { return None; }
     retry_candidate(candidate(app, failed.other()).await)
 }
 
@@ -398,14 +408,14 @@ pub async fn diarize_file(
         .to_str()
         .ok_or_else(|| anyhow!("non-utf8 audio path"))?;
 
-    let mut cmd = Command::new(&sidecar);
+    let mut cmd = sidecar_command(&sidecar);
     cmd.arg(path_str);
     cmd.arg("--engine").arg(engine.arg());
     if engine.takes_speaker_hint() {
         if let Some(n) = num_speakers.filter(|n| *n > 0) {
             cmd.arg("--num-speakers").arg(n.to_string());
         }
-        if let Some(t) = thresholds.community1_clustering {
+        if let Some(t) = thresholds.community1_clustering.filter(|_| engine == Engine::Community1) {
             cmd.arg("--threshold").arg(format!("{t}"));
         }
     }
@@ -496,10 +506,18 @@ fn parse_segment_payload(stdout: &str) -> serde_json::Result<Vec<Segment>> {
 
 /// Mirror of audio-capture sidecar resolution: bundle path in production,
 /// `src-tauri/binaries/` in dev.
+fn sidecar_command(path: &Path) -> Command {
+    let mut command = Command::new(path);
+    #[cfg(target_os = "windows")]
+    command.creation_flags(0x08000000);
+    command
+}
+
 fn sidecar_path(app: &AppHandle) -> Result<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             for name in [
+                "speaker-diarize.exe",
                 "speaker-diarize",
                 "speaker-diarize-aarch64-apple-darwin",
                 "speaker-diarize-x86_64-apple-darwin",
@@ -512,12 +530,13 @@ fn sidecar_path(app: &AppHandle) -> Result<PathBuf> {
         }
     }
     if let Ok(cwd) = std::env::current_dir() {
-        for triple in ["aarch64-apple-darwin", "x86_64-apple-darwin"] {
-            let p = cwd.join(format!("src-tauri/binaries/speaker-diarize-{triple}"));
+        for triple in ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"] {
+            let suffix = if triple.ends_with("windows-msvc") { ".exe" } else { "" };
+            let p = cwd.join(format!("src-tauri/binaries/speaker-diarize-{triple}{suffix}"));
             if p.exists() {
                 return Ok(p);
             }
-            let p = cwd.join(format!("binaries/speaker-diarize-{triple}"));
+            let p = cwd.join(format!("binaries/speaker-diarize-{triple}{suffix}"));
             if p.exists() {
                 return Ok(p);
             }
@@ -594,7 +613,7 @@ fn old_bundle_plan(present: bool, selected: Engine) -> OldBundle {
     match (present, selected) {
         (false, _) => OldBundle::Absent,
         (true, Engine::Nemotron3) => OldBundle::Replace,
-        (true, Engine::Community1) => OldBundle::Remove,
+        (true, Engine::Community1 | Engine::Windows) => OldBundle::Remove,
     }
 }
 
@@ -716,7 +735,7 @@ pub async fn status(app: &AppHandle, engine: Engine) -> Result<ModelStatus> {
             });
         }
     };
-    let output = Command::new(&sidecar)
+    let output = sidecar_command(&sidecar)
         .arg("status")
         .arg("--engine")
         .arg(engine.arg())
@@ -809,7 +828,7 @@ static DOWNLOAD_TURN: LazyLock<tokio::sync::Mutex<()>> =
 
 async fn run_download(app: &AppHandle, engine: Engine, step: &mut DownloadStep) -> Result<()> {
     let sidecar = sidecar_path(app)?;
-    let mut child = Command::new(&sidecar)
+    let mut child = sidecar_command(&sidecar)
         .arg("download")
         .arg("--engine")
         .arg(engine.arg())
@@ -868,7 +887,7 @@ async fn run_download(app: &AppHandle, engine: Engine, step: &mut DownloadStep) 
 
 pub async fn delete(app: &AppHandle, engine: Engine) -> Result<()> {
     let sidecar = sidecar_path(app)?;
-    let output = Command::new(&sidecar)
+    let output = sidecar_command(&sidecar)
         .arg("delete")
         .arg("--engine")
         .arg(engine.arg())

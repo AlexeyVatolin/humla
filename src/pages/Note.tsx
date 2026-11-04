@@ -1,3 +1,4 @@
+import { isWindows, primaryModifier } from "../lib/platform";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
@@ -1819,7 +1820,7 @@ export function NoteToolbar({
   const ACTION_LABEL = "@max-[570px]:hidden";
 
   return (
-    <div data-tauri-drag-region className={cn("@container relative z-30 h-12 shrink-0 flex items-center gap-2 pr-3", sidebarCollapsed ? "pl-[116px]" : "pl-3")}>
+    <div data-tauri-drag-region className={cn("@container relative z-30 h-12 shrink-0 flex items-center gap-2 pr-3", sidebarCollapsed ? (isWindows ? "pl-12" : "pl-[116px]") : "pl-3")}>
       <Link
         to={backTo}
         className="no-drag inline-flex items-center gap-1.5 pl-1.5 pr-2.5 py-1.5 rounded-[var(--radius)] text-[13px] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-pill-hover)] transition-colors"
@@ -1836,7 +1837,7 @@ export function NoteToolbar({
             onClick={record}
             disabled={!!recordBlock}
             className="no-drag nd-btn"
-            title={recordBlock ?? "Record (⌘R)"}
+            title={recordBlock ?? `Record (${primaryModifier}R)`}
             aria-label="Record"
           >
             <Circle size={10} fill="currentColor" strokeWidth={0} className="text-[var(--color-record)]" />
@@ -3823,7 +3824,7 @@ function DiagnosticsLinks({ noteId }: { noteId: string }) {
           type="button"
           onClick={openDiag}
           className="underline hover:text-[var(--color-text)]"
-          title="Open diagnostics folder in Finder"
+          title={`Open diagnostics folder in ${isWindows ? "File Explorer" : "Finder"}`}
         >
           Diagnostics ({diagFiles.length})
         </button>
@@ -3833,7 +3834,7 @@ function DiagnosticsLinks({ noteId }: { noteId: string }) {
           type="button"
           onClick={openAudio}
           className="underline hover:text-[var(--color-text)]"
-          title="Open retained audio folder in Finder"
+          title={`Open retained audio folder in ${isWindows ? "File Explorer" : "Finder"}`}
         >
           Audio ({audioFiles.length})
         </button>

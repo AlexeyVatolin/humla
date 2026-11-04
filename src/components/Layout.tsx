@@ -9,6 +9,7 @@ import { CaptureIndicator, indicatorState } from "./RecordingBar";
 import { useCaptureElapsed } from "../lib/captureClock";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { bindBackendListeners, useRecordingStore } from "../lib/store";
+import { isWindows } from "../lib/platform";
 
 // Passed down to routed pages via <Outlet context>. The Note toolbar uses it
 // to inset its top-left content clear of the floating expand button + the
@@ -98,7 +99,7 @@ export function Layout() {
             data-tauri-drag-region="false"
             aria-label="Open sidebar"
             title="Open sidebar"
-            className="no-drag absolute top-1.5 left-[72px] z-40 grid place-items-center w-9 h-9 rounded-full text-[var(--color-text-muted)] hover:bg-[var(--color-pill-hover)] hover:text-[var(--color-text)] transition-colors"
+            className={`no-drag absolute top-1.5 ${isWindows ? "left-1.5" : "left-[72px]"} z-40 grid place-items-center w-9 h-9 rounded-full text-[var(--color-text-muted)] hover:bg-[var(--color-pill-hover)] hover:text-[var(--color-text)] transition-colors`}
           >
             <PanelLeft size={17} strokeWidth={1.7} />
           </button>

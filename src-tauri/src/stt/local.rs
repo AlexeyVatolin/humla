@@ -43,7 +43,7 @@ impl BatchSttAdapter for LocalWhisperAdapter {
     }
 
     fn supports_word_timestamps(&self, _model: &str) -> bool {
-        true
+        !cfg!(target_os = "windows") || crate::local_gigaam::is_model(&self.model_path)
     }
 
     async fn transcribe(
@@ -86,6 +86,6 @@ mod tests {
         );
         assert_eq!(a.provider_id(), "local");
         assert_eq!(a.label(), "Local Whisper");
-        assert!(a.supports_word_timestamps("any"));
+        assert_eq!(a.supports_word_timestamps("any"), !cfg!(target_os = "windows"));
     }
 }

@@ -403,7 +403,7 @@ export function SummaryStep({ ctx }: { ctx: StepContext }) {
                   )}
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                  Private — keeps the transcript on your Mac. Needs Ollama + ~6 GB RAM.
+                  Private — keeps the transcript on your device. Needs Ollama + ~6 GB RAM.
                 </p>
               </div>
             </div>
@@ -581,7 +581,7 @@ function PullCommand({ copied, onCopy }: { copied: boolean; onCopy: () => void }
         </button>
       </div>
       <p className="text-[11px] text-[var(--color-text-muted)]">
-        On a 16 GB Mac, use <code>ollama pull {RECOMMENDED_OLLAMA_MODEL_16GB}</code> instead
+        On a 16 GB computer, use <code>ollama pull {RECOMMENDED_OLLAMA_MODEL_16GB}</code> instead
         — {RECOMMENDED_OLLAMA_MODEL} needs ~24 GB+.
       </p>
     </div>
@@ -617,7 +617,7 @@ function ModelSelect({
             (m === RECOMMENDED_OLLAMA_MODEL
               ? " (recommended)"
               : m === RECOMMENDED_OLLAMA_MODEL_16GB
-                ? " (16 GB Macs)"
+                ? " (16 GB RAM)"
                 : ""),
         })),
       ]}

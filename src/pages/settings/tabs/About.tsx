@@ -1,3 +1,4 @@
+import { isWindows } from "../../../lib/platform";
 import { getVersion } from "@tauri-apps/api/app";
 import { open as openExternal } from "@tauri-apps/plugin-shell";
 import { useEffect, useRef, useState } from "react";
@@ -139,7 +140,7 @@ export function AboutTab() {
         <Row label="Privacy">
           <p className="text-sm">No tracking, no profiles, no third-party analytics.</p>
           <p className="text-xs text-[var(--color-text-muted)] mt-2">
-            Your notes, audio, and transcripts stay on your Mac. Cloud
+            Your notes, audio, and transcripts stay on your device. Cloud
             transcription / summarisation only sends data to OpenAI when
             you explicitly select cloud providers.
           </p>
@@ -153,14 +154,14 @@ export function AboutTab() {
             <code className="nd-code px-2 py-1 rounded bg-[var(--color-pill-hover)] flex-1 break-all">
               {dataDir || "—"}
             </code>
-            <Btn onClick={() => dataDir && openExternal(dataDir)} disabled={!dataDir}>
-              Open in Finder
+            <Btn onClick={() => dataDir && ipc.openInFinder(dataDir)} disabled={!dataDir}>
+              Open in {isWindows ? "File Explorer" : "Finder"}
             </Btn>
           </div>
           <p className="text-xs text-[var(--color-text-muted)] mt-2">
             Notes, settings, downloaded models, and the audio temp dir all
             live here. Back up <code>notes.sqlite</code> from this folder
-            to copy your library to another Mac.
+            to copy your library to another device.
           </p>
         </Row>
       </Section>

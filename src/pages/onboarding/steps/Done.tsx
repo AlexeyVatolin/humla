@@ -1,3 +1,4 @@
+import { isWindows } from "../../../lib/platform";
 // Step 7 — "You're all set" status recap (design/ONBOARDING.md § 7).
 //
 // The wizard's receipt. A checklist of rows, each with a status pill and each
@@ -144,7 +145,7 @@ export function DoneStep({ ctx }: { ctx: StepContext }) {
             s == null
               ? "Checking…"
               : s.screenGranted
-                ? "Granted"
+                ? (isWindows ? "Available" : "Granted")
                 : "Skipped — in-person only"
           }
           tone={s == null ? "muted" : s.screenGranted ? "ok" : "muted"}

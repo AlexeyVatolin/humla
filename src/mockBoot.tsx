@@ -762,7 +762,7 @@ function TranscriptionKeysHarness() {
 
 // ---- #193 axis: the speaker-label engines in Settings, and Home's offer to
 // switch an upgraded install to Nemotron 3.
-const ENGINE_SIZE: Record<DiarizeEngine, number> = { nemotron3: 193_000_000, community1: 21_776_918 };
+const ENGINE_SIZE: Record<DiarizeEngine, number> = { nemotron3: 193_000_000, community1: 21_776_918, windows: 32_527_278 };
 
 // `warmUpError`: Nemotron 3's files are on disk awaiting a warm-up, which failed
 // under this macOS when it is a string.

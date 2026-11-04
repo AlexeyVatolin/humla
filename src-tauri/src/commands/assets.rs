@@ -108,6 +108,9 @@ pub fn open_in_finder(app: AppHandle, path: String) -> Result<(), String> {
     if !requested.starts_with(&app_dir_canon) {
         return Err("path outside app data dir".into());
     }
+    #[cfg(target_os = "windows")]
+    humla_windows::permissions::open_path(&requested).map_err(err)?;
+    #[cfg(not(target_os = "windows"))]
     std::process::Command::new("open")
         .arg(&requested)
         .spawn()

@@ -21,13 +21,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # also what the app's echo pass runs; its CLI is built only when asked
 # for: `cargo run --release -p echo-probe -- …`.
 [workspace]
-members = ["crates/echo-probe", "crates/gigaam"]
+members = ["crates/echo-probe", "crates/gigaam", "crates/windows"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["protocol-asset", "macos-private-api", "tray-icon"] }
+tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -35,7 +35,6 @@ tokio = { version = "1", features = ["full"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 reqwest = { version = "0.12", features = ["json", "multipart", "rustls-tls", "stream"], default-features = false }
 futures-util = "0.3"
-whisper-rs = { version = "0.16", features = ["metal", "raw-api"] }
 # Local LLM inference is delegated to whichever OpenAI-compatible HTTP server
 # the user runs (Ollama, LM Studio, llama-server, vLLM, …). We reuse the
 # existing reqwest client; no in-process GGML runtime to avoid the static
@@ -63,7 +62,7 @@ tauri-plugin-notification = "2"
 # OpenAI API key lives in macOS Keychain (apple-native backend, no D-Bus
 # / linux-keyutils transitive deps). Migration from the legacy SQLite
 # row is one-shot inside read_openai_api_key.
-keyring = { version = "3", default-features = false, features = ["apple-native"] }
+keyring = { version = "3", default-features = false, features = ["apple-native", "windows-native"] }
 rmcp = { version = "3.6", default-features = false, features = ["server", "transport-io", "macros"] }
 # The lag of the mic behind the system stream and the echo canceller, for the
 # diarize input. No DSP dependencies of its own.
@@ -90,9 +89,14 @@ tauri-plugin-deep-link = "~2.4"
 tempfile = "3"
 
 [target.'cfg(target_os = "macos")'.dependencies]
+tauri = { version = "2", features = ["macos-private-api"] }
+whisper-rs = { version = "0.16", features = ["metal", "raw-api"] }
 objc2-core-audio = { version = "0.3.2", default-features = false, features = ["std", "AudioHardware"] }
 objc2-core-foundation = "0.3.2"
 objc2-app-kit = "0.3.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+humla-windows = { path = "crates/windows" }
 
 [features]
 default = []

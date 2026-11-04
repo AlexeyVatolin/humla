@@ -1,0 +1,109 @@
+name: Windows
+
+on:
+  workflow_run:
+    workflows: [Sync upstream release and publish]
+    types: [completed]
+    branches: [local]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Source ref to validate without publishing (empty builds the latest release)
+        type: string
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-release
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    if: github.repository == 'AlexeyVatolin/humla' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: windows-2025
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CARGO_BUILD_JOBS: 3
+      CMAKE_BUILD_PARALLEL_LEVEL: 3
+      RELEASE_BASE_URL: https://github.com/AlexeyVatolin/humla/releases/download
+      GIGAAM_FIXTURE_URL: https://huggingface.co/csukuangfj/sherpa-onnx-nemo-transducer-punct-giga-am-v3-russian-2025-12-16/resolve/a6039be7cee829a9044a69ac0ebaf1c191217c97/test_wavs/example.wav
+    steps:
+      - name: Select release
+        id: source
+        shell: pwsh
+        env:
+          REQUESTED_REF: ${{ inputs.ref }}
+        run: |
+          if ($env:REQUESTED_REF) {
+            "ref=$env:REQUESTED_REF" >> $env:GITHUB_OUTPUT
+            "publish=false" >> $env:GITHUB_OUTPUT
+          } else {
+            $tag = gh api "repos/$env:GITHUB_REPOSITORY/releases/latest" --jq .tag_name
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            "ref=$tag" >> $env:GITHUB_OUTPUT
+            "publish=true" >> $env:GITHUB_OUTPUT
+          }
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ steps.source.outputs.ref }}
+      - uses: pnpm/action-setup@v6.1.1
+        with:
+          version: 10
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Rust
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.94.0 --profile minimal
+          rustup default 1.94.0
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-on-failure: true
+      - uses: actions/cache@v6.1.0
+        with:
+          path: src-tauri/target/windows-runtime
+          key: windows-directml-${{ hashFiles('scripts/windows-runtime.json', 'scripts/prepare-windows-runtime.mjs', 'src-tauri/crates/windows/native/directml-session.inc') }}
+      - name: Dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Frontend tests
+        run: pnpm test
+      - name: Build Windows installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        run: node scripts/build-windows.mjs
+      - name: Native tests
+        shell: pwsh
+        env:
+          SHERPA_ONNX_LIB_DIR: ${{ github.workspace }}\src-tauri\target\windows-runtime\lib
+        run: |
+          $env:HUMLA_ASR_MODEL = Join-Path $env:RUNNER_TEMP 'gigaam-v3-e2e-rnnt'
+          $env:HUMLA_ASR_AUDIO = Join-Path $env:RUNNER_TEMP 'gigaam-example.wav'
+          Invoke-WebRequest $env:GIGAAM_FIXTURE_URL -OutFile $env:HUMLA_ASR_AUDIO
+          cargo test --manifest-path src-tauri/Cargo.toml -p humla-windows --target x86_64-pc-windows-msvc -- --include-ignored
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $directory = 'src-tauri/target/x86_64-pc-windows-msvc/release'
+          Copy-Item src-tauri/target/windows-runtime/lib/*.dll $directory -Force
+          $status = & "$directory/audio-capture.exe" status | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $status.screen -ne 'not_required') { throw 'Windows audio status failed' }
+          $application = Start-Process "$directory/humla.exe" -PassThru
+          Start-Sleep -Seconds 10
+          if ($application.HasExited) { throw "Humla exited with $($application.ExitCode)" }
+          Stop-Process -Id $application.Id
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: Humla-windows-x64
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe*
+          if-no-files-found: error
+      - name: Publish Windows update
+        if: steps.source.outputs.publish == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.source.outputs.ref }}
+        run: node scripts/publish-windows-release.mjs

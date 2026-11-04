@@ -164,7 +164,7 @@ describe("settings dialog", () => {
     const dialog = await screen.findByRole("dialog", { name: /settings/i });
 
     const toggle = await within(dialog).findByRole("switch", {
-      name: /keep mac awake while recording/i,
+      name: /keep computer awake while recording/i,
     });
     expect(toggle).toBeChecked();
 
@@ -185,7 +185,7 @@ describe("settings dialog", () => {
       name: /keep recorded audio/i,
     });
 
-    expect(within(dialog).getByText(/no audio is stored on this mac/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/no audio is stored on this device/i)).toBeInTheDocument();
 
     await userEvent.click(toggle);
 
@@ -193,7 +193,7 @@ describe("settings dialog", () => {
       within(dialog).getByText(/keep recordings for playback and speaker re-detection/i),
     ).toBeInTheDocument();
     expect(
-      within(dialog).queryByText(/no audio is stored on this mac/i),
+      within(dialog).queryByText(/no audio is stored on this device/i),
     ).not.toBeInTheDocument();
   });
 
@@ -699,7 +699,7 @@ describe("settings dialog", () => {
 
     expect(await within(dialog).findByText("Provider")).toBeInTheDocument();
     expect(
-      within(dialog).getByText(/local keeps the transcript on your mac/i),
+      within(dialog).getByText(/local keeps the transcript on your device/i),
     ).toBeInTheDocument();
     // Key inline under the cloud provider — no separate keys surface.
     expect(

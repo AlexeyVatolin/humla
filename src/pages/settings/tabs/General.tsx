@@ -37,7 +37,7 @@ export function GeneralTab() {
         />
         <Row
           label="Theme"
-          description="System follows macOS appearance."
+          description="System follows your device’s appearance."
           control={
             <Segmented
               label="Theme"

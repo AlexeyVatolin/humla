@@ -1,3 +1,4 @@
+import { primaryModifier } from "../lib/platform";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Moon, Plus, Sun } from "lucide-react";
 import { ipc } from "../lib/ipc";
@@ -58,7 +59,7 @@ export function TopBar() {
       <button
         type="button"
         onClick={newNote}
-        title="⌘N"
+        title={`${primaryModifier}N`}
         className="nd-btn nd-btn-primary no-drag"
       >
         <Plus size={15} strokeWidth={1.8} />

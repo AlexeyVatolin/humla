@@ -1,10 +1,12 @@
 import { ipc, type DiarizeDownloadProgress, type DiarizeEngine } from "./ipc";
+import { isWindows } from "./platform";
 
-export const DIARIZE_ENGINES: DiarizeEngine[] = ["nemotron3", "community1"];
+export const DIARIZE_ENGINES: DiarizeEngine[] = isWindows ? ["windows"] : ["nemotron3", "community1"];
 
 export const DIARIZE_ENGINE_LABEL: Record<DiarizeEngine, string> = {
   nemotron3: "Nemotron 3",
   community1: "Community-1",
+  windows: "Pyannote (DirectML)",
 };
 
 /** The most speakers Nemotron 3 tells apart. Mirrors `NEMOTRON_MAX_SPEAKERS`
@@ -14,9 +16,10 @@ export const NEMOTRON_MAX_SPEAKERS = 8;
 // Mirrors `DEFAULT_DIARIZE_MODEL` (commands.rs) and `Engine::from_setting`
 // (diarize.rs): an unset `diarize_model` is a fresh install, on Nemotron 3,
 // since the upgrade migration writes a row for every other install.
-export const DEFAULT_DIARIZE_ENGINE: DiarizeEngine = "nemotron3";
+export const DEFAULT_DIARIZE_ENGINE: DiarizeEngine = isWindows ? "windows" : "nemotron3";
 
 export function selectedDiarizeEngine(stored: string | null): DiarizeEngine {
+  if (isWindows) return "windows";
   if (stored === null) return DEFAULT_DIARIZE_ENGINE;
   return stored === "nemotron3" ? "nemotron3" : "community1";
 }
@@ -26,6 +29,7 @@ export function selectedDiarizeEngine(stored: string | null): DiarizeEngine {
  *  when a run with it fails (`engine_preference` / `retry_engine` in
  *  diarize.rs). It goes first because it is the small one. */
 export function enginesToDownload(selected: DiarizeEngine): DiarizeEngine[] {
+  if (isWindows) return ["windows"];
   return selected === "community1" ? ["community1"] : ["community1", selected];
 }
 

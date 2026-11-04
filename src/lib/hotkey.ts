@@ -8,11 +8,12 @@
 // with no translation table between the two sides to keep in sync.
 
 import type { RecordingPhase } from "./ipc";
+import { isWindows } from "./platform";
 
 // ⌃⌘R. See `DEFAULT_RECORD_HOTKEY` in `src-tauri/src/menubar.rs` for why this
 // combination and not another — it is the half of the pair that carries the
 // reasoning. Change both.
-export const DEFAULT_RECORD_HOTKEY = "Command+Control+KeyR";
+export const DEFAULT_RECORD_HOTKEY = isWindows ? "Control+Alt+KeyR" : "Command+Control+KeyR";
 
 type ModifierState = {
   code: string;
@@ -44,7 +45,7 @@ export function accelFromEvent(e: ModifierState): string | null {
   if (!e.code || MODIFIER_CODES.test(e.code)) return null;
 
   const mods: string[] = [];
-  if (e.metaKey) mods.push("Command");
+  if (e.metaKey) mods.push(isWindows ? "Super" : "Command");
   if (e.ctrlKey) mods.push("Control");
   if (e.altKey) mods.push("Alt");
   if (e.shiftKey) mods.push("Shift");
@@ -98,6 +99,10 @@ const KEY_GLYPHS: Record<string, string> = {
 export function formatAccel(accel: string): string {
   if (!accel.trim()) return "None";
   const tokens = accel.split("+").map((t) => t.trim()).filter(Boolean);
+  if (isWindows) {
+    const names: Record<string, string> = { Control: "Ctrl", Command: "Win", Cmd: "Win", Super: "Win", Option: "Alt" };
+    return tokens.map(token => names[token] ?? keyGlyph(token)).join("+");
+  }
   const glyphs: string[] = [];
   let key = "";
   for (const token of tokens) {

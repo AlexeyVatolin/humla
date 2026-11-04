@@ -1,3 +1,4 @@
+import { isWindows } from "../../../lib/platform";
 import type { ProviderConfig } from "../../../lib/ipc";
 import {
   DEEPGRAM_MODELS,
@@ -123,7 +124,7 @@ export function ProviderConfigForm({
     <>
       <Row
         label="Provider"
-        description="Where audio is transcribed — on this Mac or a cloud API."
+        description="Where audio is transcribed — on this device or a cloud API."
         control={
           <Select
             value={provider}
@@ -174,7 +175,7 @@ export function ProviderConfigForm({
 
       {value.provider === "local" && value.model_id !== "gigaam-v3-e2e-rnnt" && (
         <>
-          <Row
+          {!isWindows && <Row
             label="Quality"
             description="Speed vs accuracy for on-device Whisper — Quality uses beam search and catches more borderline words."
             control={
@@ -184,13 +185,13 @@ export function ProviderConfigForm({
                 options={WHISPER_PRESETS}
               />
             }
-          />
+          />}
           <Row
-            label="Use Metal (Apple GPU)"
-            description="Runs Whisper inference on the GPU — much faster on Apple Silicon."
+            label={isWindows ? "Use DirectML (GPU)" : "Use Metal (Apple GPU)"}
+            description={isWindows ? "Runs transcription on a DirectX 12 graphics processor." : "Runs Whisper inference on the GPU — much faster on Apple Silicon."}
             control={
               <Toggle
-                label="Use Metal (Apple GPU) for Whisper inference"
+                label={isWindows ? "Use DirectML for Whisper inference" : "Use Metal (Apple GPU) for Whisper inference"}
                 checked={value.use_gpu}
                 onChange={(on) => onChange({ ...value, use_gpu: on })}
               />

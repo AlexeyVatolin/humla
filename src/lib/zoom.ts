@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { isWindows } from "./platform";
 
 const ZOOM_KEY = "humla.zoom";
 const ZOOM_MIN = 0.5;
@@ -23,7 +24,7 @@ export function resolveStoredZoom(raw: string | null): number {
 
 /** CSS px for the traffic-light spacer so device height stays constant under zoom. */
 export function trafficLightSpacerCssPx(zoom: number): number {
-  return TRAFFIC_LIGHT_CLEARANCE_PX / zoom;
+  return isWindows ? 8 : TRAFFIC_LIGHT_CLEARANCE_PX / zoom;
 }
 
 type ZoomState = {

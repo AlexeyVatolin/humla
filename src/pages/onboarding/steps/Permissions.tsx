@@ -24,6 +24,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ShieldCheck, Mic, MonitorSpeaker, RotateCw, ArrowRight } from "lucide-react";
 import { ipc, type PermissionStatus, type PermissionsStatus } from "../../../lib/ipc";
+import { isWindows, permissionReady, systemSettingsName } from "../../../lib/platform";
 import type { StepContext } from "../types";
 import { StepShell } from "../StepShell";
 
@@ -33,6 +34,8 @@ function pill(status: PermissionStatus): { text: string; tone: Tone } {
   switch (status) {
     case "granted":
       return { text: "Granted", tone: "ok" };
+    case "not_required":
+      return { text: "Available", tone: "ok" };
     case "denied":
       return { text: "Denied", tone: "bad" };
     case "restricted":
@@ -86,7 +89,7 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
         screenGrantedAtMount.current = s.screen === "granted";
       }
       // Latch the restart requirement: not-granted at mount, granted now.
-      if (screenGrantedAtMount.current === false && s.screen === "granted") {
+      if (!isWindows && screenGrantedAtMount.current === false && s.screen === "granted") {
         setNeedsRestart(true);
       }
       setStatus(s);
@@ -177,13 +180,13 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
   const micGranted = status.microphone === "granted";
   const micBlocked =
     status.microphone === "denied" || status.microphone === "restricted";
-  const screenGranted = status.screen === "granted";
+  const screenGranted = permissionReady(status.screen);
 
   return (
     <StepShell
       icon={<ShieldCheck size={26} strokeWidth={1.6} />}
       title="Grant recording permissions"
-      subtitle="Humla needs microphone access to record. System audio is optional — grant it only if you record remote calls."
+      subtitle={isWindows ? "Allow desktop apps to access your microphone in Windows Settings. System audio is available without an extra permission." : "Humla needs microphone access to record. System audio is optional — grant it only if you record remote calls."}
     >
       <div className="w-full max-w-md flex flex-col gap-3 text-left">
         {/* Microphone — required */}
@@ -206,7 +209,7 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
               </p>
               {micBlocked && (
                 <p className="mt-1.5 text-xs leading-relaxed text-[var(--color-danger)]">
-                  Microphone access was declined. Enable it in System Settings,
+                  Microphone access was declined. Enable it in {systemSettingsName},
                   then return here.
                 </p>
               )}
@@ -218,7 +221,7 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
                   onClick={openMicSettings}
                   className="nd-btn"
                 >
-                  Open System Settings
+                  Open {systemSettingsName}
                 </button>
               ) : (
                 <button
@@ -227,7 +230,7 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
                   disabled={busy !== null}
                   className="nd-btn nd-btn-primary"
                 >
-                  {busy === "microphone" ? "Requesting…" : "Allow microphone"}
+                  {busy === "microphone" ? (isWindows ? "Opening…" : "Requesting…") : (isWindows ? "Open microphone settings" : "Allow microphone")}
                 </button>
               )}
             </div>
@@ -250,9 +253,7 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
                 <StatusPill status={status.screen} />
               </div>
               <p className="mt-1.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                macOS bundles system-audio capture under "Screen Recording."
-                Humla uses it to hear the other side of your calls — it never
-                captures your screen.
+                {isWindows ? "Humla captures the other side of your calls through Windows audio. No screen recording permission is needed." : 'macOS bundles system-audio capture under "Screen Recording." Humla uses it to hear the other side of your calls — it never captures your screen.'}
               </p>
             </div>
             <div className="shrink-0">

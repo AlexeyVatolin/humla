@@ -57,10 +57,7 @@
       "binaries/speaker-diarize",
       "binaries/humla-mcp",
       "binaries/humla-gigaam"
-    ],
-    "resources": {
-      "resources/default.metallib": "default.metallib"
-    }
+    ]
   },
   "plugins": {
     "deep-link": {

@@ -1533,6 +1533,10 @@ pub fn speaker_default_name(
 /// The macOS account's full name ("Michael Wilhelmsen"), via `id -F`. `None` if
 /// the command is unavailable, fails, or returns something empty.
 fn os_full_name() -> Option<String> {
+    #[cfg(target_os = "windows")]
+    return humla_windows::permissions::display_name();
+    #[cfg(not(target_os = "windows"))]
+    {
     let out = std::process::Command::new("/usr/bin/id").arg("-F").output().ok()?;
     if !out.status.success() {
         return None;
@@ -1542,6 +1546,7 @@ fn os_full_name() -> Option<String> {
         None
     } else {
         Some(name)
+    }
     }
 }
 

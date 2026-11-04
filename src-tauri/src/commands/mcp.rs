@@ -21,7 +21,7 @@ use super::err;
 pub fn mcp_server_path() -> Result<String, String> {
     let exe = std::env::current_exe().map_err(err)?;
     let dir = exe.parent().ok_or_else(|| "no parent directory".to_string())?;
-    dir.join("humla-mcp")
+    dir.join(format!("humla-mcp{}", std::env::consts::EXE_SUFFIX))
         .to_str()
         .map(str::to_string)
         .ok_or_else(|| "non-utf8 path".to_string())

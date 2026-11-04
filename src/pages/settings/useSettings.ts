@@ -30,6 +30,7 @@ export function useSettings() {
   const [diarize, setDiarize] = useState<Record<DiarizeEngine, DiarizeState>>({
     nemotron3: EMPTY_DIARIZE_STATE,
     community1: EMPTY_DIARIZE_STATE,
+    windows: EMPTY_DIARIZE_STATE,
   });
   const updateDiarize = useCallback(
     (engine: DiarizeEngine, f: (s: DiarizeState) => DiarizeState) =>

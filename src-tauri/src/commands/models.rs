@@ -4,13 +4,23 @@
 //! `local_model_path` is also called by the recording / transcribe paths
 //! that stay in the parent module, hence `pub(crate)`.
 
+#[cfg(target_os = "windows")]
+#[path = "models_windows.rs"]
+mod windows;
+#[cfg(target_os = "windows")]
+pub use windows::*;
+
 use super::err;
 use crate::diarize;
+#[cfg(not(target_os = "windows"))]
 use crate::local_whisper;
 use crate::AppState;
+#[cfg(not(target_os = "windows"))]
 use futures_util::StreamExt;
 use std::path::PathBuf;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager, State};
+#[cfg(not(target_os = "windows"))]
+use tauri::Emitter;
 
 // ---- Speaker diarization model management ---------------------------------
 
@@ -18,7 +28,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 /// quietly become community-1, or deleting it would delete community-1's model.
 fn parse_engine(engine: Option<String>) -> Result<diarize::Engine, String> {
     match engine.as_deref() {
-        None => Ok(diarize::Engine::Community1),
+        None => Ok(diarize::Engine::from_setting("community1")),
         Some(arg) => diarize::Engine::parse(arg).ok_or_else(|| format!("unknown diarize engine {arg:?}")),
     }
 }
@@ -47,10 +57,14 @@ pub async fn diarize_delete(app: AppHandle, engine: Option<String>) -> Result<()
 // ---- Local Whisper model management ----------------------------------------
 
 fn local_model_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    #[cfg(not(target_os = "windows"))]
     let dir = app.path().app_data_dir().map_err(err)?.join("models");
+    #[cfg(target_os = "windows")]
+    let dir = app.path().app_local_data_dir().map_err(err)?.join("models");
     Ok(dir)
 }
 
+#[cfg(not(target_os = "windows"))]
 fn model_path_for(app: &AppHandle, info: &local_whisper::ModelInfo) -> Result<PathBuf, String> {
     Ok(local_model_dir(app)?.join(info.filename))
 }
@@ -69,6 +83,7 @@ fn model_path_for(app: &AppHandle, info: &local_whisper::ModelInfo) -> Result<Pa
 /// mechanism; kept in the signature so callers don't have to thread it
 /// out (and so a future language-aware behaviour can slot back in
 /// without re-touching every call site).
+#[cfg(not(target_os = "windows"))]
 pub(crate) fn local_model_path(
     app: &AppHandle,
     _language: &str,
@@ -109,6 +124,7 @@ pub struct LocalWhisperModelStatus {
     path: Option<String>,
 }
 
+#[cfg(not(target_os = "windows"))]
 #[tauri::command]
 pub fn local_whisper_models(app: AppHandle) -> Result<Vec<LocalWhisperModelStatus>, String> {
     let dir = local_model_dir(&app)?;
@@ -158,6 +174,7 @@ struct DownloadError {
     message: String,
 }
 
+#[cfg(not(target_os = "windows"))]
 #[tauri::command]
 pub async fn local_whisper_download(app: AppHandle, model_id: String) -> Result<(), String> {
     let r = local_whisper_download_inner(&app, &model_id).await;
@@ -174,6 +191,7 @@ pub async fn local_whisper_download(app: AppHandle, model_id: String) -> Result<
     r
 }
 
+#[cfg(not(target_os = "windows"))]
 async fn local_whisper_download_inner(app: &AppHandle, model_id: &str) -> Result<(), String> {
     let info = local_whisper::find_model(model_id)
         .ok_or_else(|| format!("unknown model id: {model_id}"))?;
@@ -241,6 +259,7 @@ async fn local_whisper_download_inner(app: &AppHandle, model_id: &str) -> Result
     Ok(())
 }
 
+#[cfg(not(target_os = "windows"))]
 #[tauri::command]
 pub async fn local_whisper_delete(
     app: AppHandle,

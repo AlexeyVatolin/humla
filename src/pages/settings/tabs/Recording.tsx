@@ -7,6 +7,7 @@ import { LaunchAtLoginField } from "../components/LaunchAtLoginField";
 import { Row, Section } from "../components/Section";
 import { Toggle } from "../components/Toggle";
 import type { SettingsHook } from "../useSettings";
+import { isWindows, trayName } from "../../../lib/platform";
 
 // Recording section: capture permissions, audio retention, and menu-bar mode
 // (#21) — the triggers that start a recording from outside the window.
@@ -37,7 +38,7 @@ export function RecordingSection({
           description={
             keeping
               ? "Keep recordings for playback and speaker re-detection. Roughly 1 MB per minute per channel."
-              : "No audio is stored on this Mac — transcript only; playback and speaker re-detection unavailable."
+              : "No audio is stored on this device — transcript only; playback and speaker re-detection unavailable."
           }
           control={
             <Toggle
@@ -57,7 +58,7 @@ export function RecordingSection({
         {keeping && (
           <Row
             label="Transcribe manually"
-            description="Skip transcription while recording and run it later with a Transcribe button instead. Lighter on your Mac."
+            description="Skip transcription while recording and run it later with a Transcribe button instead. Uses fewer resources while recording."
             control={
               <Toggle
                 label="Transcribe manually"
@@ -74,11 +75,11 @@ export function RecordingSection({
 
       <Section title="Power">
         <Row
-          label="Keep Mac awake while recording"
-          description="Stops your Mac from going to sleep during a recording. The display can still turn off, and a closed lid still sleeps."
+          label="Keep computer awake while recording"
+          description="Prevents sleep during a recording. The display can still turn off."
           control={
             <Toggle
-              label="Keep Mac awake while recording"
+              label="Keep computer awake while recording"
               checked={keepAwake}
               onChange={(on) => update("keep_awake", on ? "true" : "false")}
             />
@@ -86,7 +87,7 @@ export function RecordingSection({
         />
       </Section>
 
-      <Section title="Menu bar">
+      <Section title={isWindows ? "System tray" : "Menu bar"}>
         <Row
           label="Zoom meeting reminders"
           description="Offer to record when Zoom starts using your microphone. Humla must be running."
@@ -100,22 +101,22 @@ export function RecordingSection({
         />
         <Row
           label="Open at login"
-          description="Humla starts in the menu bar when you log in, without opening its window. If you added Humla to Login Items in System Settings, remove it there."
+          description={isWindows ? "Humla starts in the system tray when you sign in, without opening its window. You can also manage this in Windows Settings → Apps → Startup." : "Humla starts in the menu bar when you log in, without opening its window. If you added Humla to Login Items in System Settings, remove it there."}
           control={<LaunchAtLoginField />}
         />
         <Row
-          label="Keep running in the menu bar"
+          label={`Keep running in the ${trayName}`}
           // Off by default, so closing the window still quits until the user
           // opts in — and the copy states which of the two regimes is in force
           // rather than describing the switch.
           description={
             closeToTray
-              ? "Closing the window hides Humla in the menu bar and drops its Dock icon. Quit from the menu-bar icon."
-              : "Closing the window quits Humla. The menu-bar icon is still there while it runs."
+              ? `Closing the window hides Humla in the ${trayName}. Quit from its icon.`
+              : `Closing the window quits Humla. Its ${trayName} icon is visible while it runs.`
           }
           control={
             <Toggle
-              label="Keep running in the menu bar"
+              label={`Keep running in the ${trayName}`}
               checked={closeToTray}
               onChange={(on) => update("close_to_tray", on ? "true" : "false")}
             />

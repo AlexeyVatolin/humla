@@ -79,7 +79,7 @@ export async function computeSetupStatus(): Promise<SetupStatus> {
   ]);
 
   const micGranted = perm?.microphone === "granted";
-  const screenGranted = perm?.screen === "granted";
+  const screenGranted = perm?.screen === "granted" || perm?.screen === "not_required";
 
   // ---- STT working? -------------------------------------------------------
   // Default config drives it. Local → the model file must be downloaded.

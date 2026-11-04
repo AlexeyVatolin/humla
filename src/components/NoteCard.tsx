@@ -1,3 +1,4 @@
+import { isWindows } from "../lib/platform";
 import { type MouseEvent, type KeyboardEvent, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Link } from "react-router-dom";
@@ -75,7 +76,7 @@ export function NoteCard({
   const shiftRef = useRef(false);
 
   function handleClick(e: MouseEvent) {
-    if (onSelect && (e.metaKey || e.shiftKey)) {
+    if (onSelect && ((isWindows ? e.ctrlKey : e.metaKey) || e.shiftKey)) {
       e.preventDefault();
       onSelect({ shiftKey: e.shiftKey });
     }

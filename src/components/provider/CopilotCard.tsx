@@ -158,8 +158,8 @@ export function CopilotCard({
           <>
             <p className="text-xs text-[var(--color-text-muted)] mt-0.5 mb-2">
               {brokenCli
-                ? `The Copilot CLI on this Mac (version ${status.cliVersion ?? "unknown"}) didn't start. Download the version Humla supports (${status.downloadVersion}, about 120 MB).`
-                : `Humla reaches Copilot through GitHub's Copilot CLI, which isn't on this Mac yet (version ${status.downloadVersion}, about 120 MB).`}
+                ? `The Copilot CLI on this device (version ${status.cliVersion ?? "unknown"}) didn't start. Download the version Humla supports (${status.downloadVersion}, about 120 MB).`
+                : `Humla reaches Copilot through GitHub's Copilot CLI, which isn't on this device yet (version ${status.downloadVersion}, about 120 MB).`}
             </p>
             {brokenCli && (
               <p className="text-xs text-[var(--color-danger)] mb-2 break-words">{status.cliError}</p>

@@ -1,3 +1,4 @@
+import { credentialStoreName } from "../../../lib/platform";
 import { useEffect, useState } from "react";
 import { open as openExternal } from "@tauri-apps/plugin-shell";
 import { Plus, Trash2 } from "lucide-react";
@@ -199,7 +200,7 @@ function EndpointForm() {
       </Row>
       <div className="py-3.5 space-y-3">
         <p className="text-xs text-[var(--color-text-muted)]">
-          The URL and headers are kept in the macOS Keychain on this Mac and never synced. Audio
+          The URL and headers are kept in {credentialStoreName} on this device and never synced. Audio
           is never sent.{" "}
           <button
             type="button"

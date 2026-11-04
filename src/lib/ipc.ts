@@ -317,7 +317,7 @@ export type DiarizeDownloadProgress = {
   engine: DiarizeEngine;
 };
 
-export type DiarizeEngine = "community1" | "nemotron3";
+export type DiarizeEngine = "community1" | "nemotron3" | "windows";
 
 // Word-level timing in stream-absolute milliseconds. Drives the
 // playback view's word-by-word highlight when present. Empty for
@@ -801,6 +801,7 @@ export const ipc = {
 export type PermissionKind = "microphone" | "screen";
 export type PermissionStatus =
   | "granted"
+  | "not_required"
   | "denied"
   | "restricted"
   | "not_determined"

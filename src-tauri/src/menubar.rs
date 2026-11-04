@@ -53,7 +53,10 @@ use crate::{db, AppState};
 ///
 /// Written in the order [`accelFromEvent`](../../src/lib/hotkey.ts) produces,
 /// so re-recording this exact combination is a no-op rather than a re-register.
+#[cfg(not(target_os = "windows"))]
 pub const DEFAULT_RECORD_HOTKEY: &str = "Command+Control+KeyR";
+#[cfg(target_os = "windows")]
+pub const DEFAULT_RECORD_HOTKEY: &str = "Control+Alt+KeyR";
 
 /// Settings row holding the accelerator. An empty value means "no hotkey";
 /// an absent row means "never configured", which resolves to the default.

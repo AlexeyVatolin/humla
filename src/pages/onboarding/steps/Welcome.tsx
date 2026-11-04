@@ -13,7 +13,7 @@ const FEATURES = [
   {
     icon: FileText,
     title: "Transcribe",
-    body: "On your Mac, or via an API.",
+    body: "On your device, or via an API.",
   },
   {
     icon: Sparkles,
@@ -66,7 +66,7 @@ export function WelcomeStep({ ctx }: { ctx: StepContext }) {
           className="mt-0.5 shrink-0 text-[var(--color-success)]"
         />
         <span>
-          Private by default — your notes and audio stay on your Mac unless you
+          Private by default — your notes and audio stay on your device unless you
           choose otherwise.
         </span>
       </div>

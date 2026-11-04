@@ -1,3 +1,4 @@
+import { primaryModifier } from "../lib/platform";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   ChevronLeft,
@@ -211,7 +212,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
           className="flex-1 text-sm min-w-0 bg-transparent"
         />
         <kbd className="shrink-0 px-1.5 py-0.5 text-[10px] text-[var(--color-text-disabled)] border border-[var(--color-line-visible)] rounded tabular-nums">
-          ⌘K
+          {primaryModifier}K
         </kbd>
       </div>
 
@@ -337,7 +338,7 @@ export function Sidebar({ onCollapse }: { onCollapse: () => void }) {
         icon={SettingsIcon}
         label="Settings"
         active={location.pathname.startsWith("/settings")}
-        title="⌘,"
+        title={`${primaryModifier},`}
       />
 
 

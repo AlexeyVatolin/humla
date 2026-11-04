@@ -1,19 +1,21 @@
 import { useEffect, useState } from "react";
 import { ipc, type PermissionKind, type PermissionStatus, type PermissionsStatus } from "../lib/ipc";
+import { isWindows, permissionReady, systemSettingsName } from "../lib/platform";
 
 const LABEL: Record<PermissionKind, string> = {
   microphone: "Microphone",
-  screen: "Screen Recording",
+  screen: isWindows ? "System audio" : "Screen Recording",
 };
 
 const HELP: Record<PermissionKind, string> = {
   microphone: "Required to record your voice.",
-  screen: "Required to capture system audio (the other side of meetings).",
+  screen: isWindows ? "System audio is available without an additional permission." : "Required to capture system audio (the other side of meetings).",
 };
 
 function statusLabel(s: PermissionStatus): { text: string; tone: "ok" | "bad" | "muted" } {
   switch (s) {
     case "granted": return { text: "Granted", tone: "ok" };
+    case "not_required": return { text: "Available", tone: "ok" };
     case "denied": return { text: "Denied", tone: "bad" };
     case "restricted": return { text: "Restricted", tone: "bad" };
     case "not_determined": return { text: "Not requested", tone: "muted" };
@@ -57,7 +59,7 @@ export function Permissions() {
       // Screen recording adds the app to the privacy list on request, but it
       // can't be granted programmatically — open System Settings so the user
       // can toggle the switch.
-      if (kind === "screen" && s.screen !== "granted") {
+      if (kind === "screen" && !permissionReady(s.screen)) {
         await ipc.permissionsOpenSettings("screen");
       }
     } catch {
@@ -81,10 +83,10 @@ export function Permissions() {
         // Recording always reports "denied" until CGRequestScreenCaptureAccess
         // has been called once — which is the call that adds the app to the
         // System Settings list. So allow Request whenever screen isn't granted.
-        const showRequest =
+        const showRequest = !isWindows && (
           status[kind] === "not_determined" ||
-          (kind === "screen" && status[kind] !== "granted");
-        const showOpen = status[kind] !== "granted";
+          (kind === "screen" && !permissionReady(status[kind])));
+        const showOpen = !permissionReady(status[kind]);
         return (
           <div
             key={kind}
@@ -130,16 +132,16 @@ export function Permissions() {
                   onClick={() => open(kind)}
                   className="px-3 py-1.5 rounded-md text-sm border border-[var(--color-line-visible)] bg-[var(--color-surface)] hover:border-[var(--color-text)] transition-colors"
                 >
-                  Open System Settings
+                  Open {systemSettingsName}
                 </button>
               )}
             </div>
           </div>
         );
       })}
-      <p className="text-xs text-[var(--color-text-muted)] mt-1">
+      {!isWindows && <p className="text-xs text-[var(--color-text-muted)] mt-1">
         After enabling Screen Recording in System Settings, you must restart the app for the change to take effect.
-      </p>
+      </p>}
     </div>
   );
 }
