@@ -324,13 +324,13 @@ fn in_pause_bars(ax: f32, ay: f32) -> bool {
 /// disc drawn as a template would come out flat black.
 fn icon_for(glyph: TrayGlyph) -> (Image<'static>, bool) {
     let rgba = match glyph {
-        TrayGlyph::Idle => bee_glyph_rgba(ICON_PX, (0, 0, 0)),
+        TrayGlyph::Idle => bee_glyph_rgba(ICON_PX, if cfg!(target_os = "windows") { (128, 128, 128) } else { (0, 0, 0) }),
         TrayGlyph::Recording => disc_glyph_rgba(ICON_PX, in_stop_square),
         TrayGlyph::Paused => disc_glyph_rgba(ICON_PX, in_pause_bars),
     };
     (
         Image::new_owned(rgba, ICON_PX, ICON_PX),
-        glyph == TrayGlyph::Idle,
+        cfg!(target_os = "macos") && glyph == TrayGlyph::Idle,
     )
 }
 
@@ -360,7 +360,7 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
         .icon(icon_for(TrayGlyph::Idle).0)
         // Pure black plus this flag: a macOS template image is read through its
         // alpha channel only, and the system tints the glyph for the bar.
-        .icon_as_template(true)
+        .icon_as_template(cfg!(target_os = "macos"))
         .tooltip("Humla")
         .menu(&menu)
         .show_menu_on_left_click(true)
@@ -889,7 +889,7 @@ mod tests {
     // black, which is the failure this pairing exists to prevent.
     #[test]
     fn only_the_idle_glyph_is_a_template() {
-        assert!(icon_for(TrayGlyph::Idle).1);
+        assert_eq!(icon_for(TrayGlyph::Idle).1, cfg!(target_os = "macos"));
         assert!(!icon_for(TrayGlyph::Recording).1);
         assert!(!icon_for(TrayGlyph::Paused).1);
     }
