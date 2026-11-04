@@ -235,7 +235,10 @@ pub async fn locate(app_data: &Path) -> Option<PathBuf> {
 
 /// `copilot --version`'s version number.
 pub async fn version(binary: &Path) -> Option<String> {
-    let run = tokio::process::Command::new(binary)
+    let mut command = tokio::process::Command::new(binary);
+    #[cfg(target_os = "windows")]
+    command.creation_flags(0x08000000);
+    let run = command
         .arg("--version")
         .stdin(std::process::Stdio::null())
         .kill_on_drop(true)

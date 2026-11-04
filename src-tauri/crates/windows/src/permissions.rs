@@ -72,7 +72,7 @@ fn open_uri(uri: PCWSTR) -> Result<()> {
     let result = unsafe { ShellExecuteW(None, w!("open"), uri, None, None, SW_SHOWNORMAL) };
     if result.0 as usize <= 32 {
         bail!(
-            "Windows Settings could not be opened: {}",
+            "Windows could not open this location: {}",
             result.0 as usize
         );
     }
@@ -81,7 +81,11 @@ fn open_uri(uri: PCWSTR) -> Result<()> {
 
 pub fn open_path(path: &std::path::Path) -> Result<()> {
     use std::os::windows::ffi::OsStrExt;
-    let path: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let path: Vec<u16> = dunce::simplified(path)
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
     open_uri(PCWSTR(path.as_ptr()))
 }
 

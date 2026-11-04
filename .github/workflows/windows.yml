@@ -69,7 +69,7 @@ jobs:
       - uses: actions/cache@v6.1.0
         with:
           path: src-tauri/target/windows-runtime
-          key: windows-directml-${{ hashFiles('scripts/windows-runtime.json', 'scripts/prepare-windows-runtime.mjs', 'src-tauri/crates/windows/native/directml-session.inc') }}
+          key: windows-directml-${{ hashFiles('scripts/windows-runtime.json', 'scripts/prepare-windows-runtime.mjs', 'src-tauri/crates/windows/native/*.inc') }}
       - name: Dependencies
         run: pnpm install --frozen-lockfile
       - name: Frontend tests

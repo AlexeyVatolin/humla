@@ -227,7 +227,7 @@ mod tests {
         let model = PathBuf::from(std::env::var_os("HUMLA_GIGAAM_MODEL").unwrap());
         let audio = PathBuf::from(std::env::var_os("HUMLA_GIGAAM_WAV").unwrap());
         let shared = crate::local_whisper::new_shared();
-        crate::local_whisper::prewarm(shared.clone(), model.clone(), true)
+        crate::local_whisper::prewarm(shared.clone(), model.clone(), true, "ru".into())
             .await
             .unwrap();
         let pid = with_worker(&shared, &model, |w| Ok(w.child.id())).unwrap();

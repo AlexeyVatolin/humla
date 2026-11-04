@@ -3522,7 +3522,7 @@ async fn ensure_provider_ready(
         if let Ok(model_path) = local_model_path(app, &language, &model_id) {
             let shared = state.whisper.clone();
             tokio::spawn(async move {
-                if let Err(e) = local_whisper::prewarm(shared, model_path, use_gpu).await {
+                if let Err(e) = local_whisper::prewarm(shared, model_path, use_gpu, language).await {
                     eprintln!("whisper prewarm: {e}");
                 }
             });

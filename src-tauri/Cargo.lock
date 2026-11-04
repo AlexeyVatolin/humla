@@ -2239,6 +2239,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dirs 5.0.1",
+ "dunce",
  "hound",
  "reqwest 0.12.28",
  "rubato",

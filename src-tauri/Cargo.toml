@@ -27,7 +27,7 @@ members = ["crates/echo-probe", "crates/gigaam", "crates/windows"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
+tauri = { version = "2", features = ["protocol-asset", "macos-private-api", "tray-icon"] }
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -89,7 +89,6 @@ tauri-plugin-deep-link = "~2.4"
 tempfile = "3"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-tauri = { version = "2", features = ["macos-private-api"] }
 whisper-rs = { version = "0.16", features = ["metal", "raw-api"] }
 objc2-core-audio = { version = "0.3.2", default-features = false, features = ["std", "AudioHardware"] }
 objc2-core-foundation = "0.3.2"

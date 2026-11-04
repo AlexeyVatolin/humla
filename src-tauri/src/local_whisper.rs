@@ -269,7 +269,7 @@ fn context_params(use_gpu: bool) -> WhisperContextParameters<'static> {
 /// chunk doesn't pay the 1–2 second cold-start tax — by the time VAD
 /// rotates the first chunk (≥ 1 s of speech + 500 ms silence), the model
 /// is ready and inference runs at ~5× realtime.
-pub async fn prewarm(shared: SharedContext, model_path: PathBuf, use_gpu: bool) -> Result<()> {
+pub async fn prewarm(shared: SharedContext, model_path: PathBuf, use_gpu: bool, _language: String) -> Result<()> {
     tokio::task::spawn_blocking(move || -> Result<()> {
         if crate::local_gigaam::is_model(&model_path) {
             crate::local_gigaam::with_worker(&shared, &model_path, |_| Ok(()))?;

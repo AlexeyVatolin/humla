@@ -165,7 +165,9 @@ impl Engine {
         match arg {
             #[cfg(target_os = "windows")]
             "windows" => Some(Engine::Windows),
+            #[cfg(not(target_os = "windows"))]
             "community1" => Some(Engine::Community1),
+            #[cfg(not(target_os = "windows"))]
             "nemotron3" => Some(Engine::Nemotron3),
             _ => None,
         }
@@ -504,8 +506,6 @@ fn parse_segment_payload(stdout: &str) -> serde_json::Result<Vec<Segment>> {
     serde_json::from_str::<Vec<Segment>>(stdout.trim())
 }
 
-/// Mirror of audio-capture sidecar resolution: bundle path in production,
-/// `src-tauri/binaries/` in dev.
 fn sidecar_command(path: &Path) -> Command {
     let mut command = Command::new(path);
     #[cfg(target_os = "windows")]
@@ -513,6 +513,8 @@ fn sidecar_command(path: &Path) -> Command {
     command
 }
 
+/// Mirror of audio-capture sidecar resolution: bundle path in production,
+/// `src-tauri/binaries/` in dev.
 fn sidecar_path(app: &AppHandle) -> Result<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {

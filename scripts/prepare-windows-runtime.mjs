@@ -43,6 +43,13 @@ if (fallback.test(code)) {
   await writeFile(session, code);
 }
 if (!code.includes(directml)) throw new Error('DirectML session setup changed');
+const runtime = await readFile(path.join(root, 'src-tauri/crates/windows/native/runtime-session.inc'), 'utf8');
+if (!code.includes(runtime)) {
+  const marker = '  Ort::SessionOptions sess_opts;';
+  if (!code.includes(marker)) throw new Error('ONNX Runtime session setup changed');
+  code = code.replace(marker, `${runtime}${marker}`);
+  await writeFile(session, code);
+}
 const native = path.join(ort, 'runtimes/win-x64/native');
 const build = path.join(cache, 'build');
 const output = path.join(cache, 'lib');

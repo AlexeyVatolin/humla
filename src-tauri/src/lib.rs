@@ -237,11 +237,13 @@ where
                 }
             });
             // Diarization models Humla no longer uses, removed once per install.
+            #[cfg(target_os = "macos")]
             {
                 let state: tauri::State<AppState> = app.state();
                 let conn = state.db.lock();
                 diarize::remove_retired_models(app.handle(), &conn);
             }
+            #[cfg(target_os = "macos")]
             {
                 let state: tauri::State<AppState> = app.state();
                 let conn = state.db.lock();
@@ -249,6 +251,7 @@ where
                     eprintln!("migrate_diarize_engine: {e}");
                 }
             }
+            #[cfg(target_os = "macos")]
             {
                 let state: tauri::State<AppState> = app.state();
                 let selected = commands::selected_diarize_engine(&state);

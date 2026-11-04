@@ -57,12 +57,19 @@ fn loaded<'a>(
     Ok(&slot.as_ref().unwrap().recognizer)
 }
 
-pub async fn prewarm(shared: SharedContext, model_path: PathBuf, use_gpu: bool) -> Result<()> {
-    if !crate::local_gigaam::is_model(&model_path) {
-        return Ok(());
-    }
+pub async fn prewarm(
+    shared: SharedContext,
+    model_path: PathBuf,
+    use_gpu: bool,
+    language: String,
+) -> Result<()> {
     tokio::task::spawn_blocking(move || {
-        loaded(&mut shared.lock(), &model_path, use_gpu, "ru").map(|_| ())
+        let language = if crate::local_gigaam::is_model(&model_path) {
+            "ru"
+        } else {
+            &language
+        };
+        loaded(&mut shared.lock(), &model_path, use_gpu, language).map(|_| ())
     })
     .await?
 }
