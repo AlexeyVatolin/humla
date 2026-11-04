@@ -485,6 +485,7 @@ where
             // resources, file descriptors, and process memory anyway, and
             // our DB writes are synced before this point. _exit(0) skips
             // atexit entirely and lets the process terminate cleanly.
+            #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Exit = event {
                 unsafe { libc::_exit(0) };
             }
@@ -520,7 +521,11 @@ where
 /// report it to, and the user is no worse off than with the silent close this
 /// replaces.
 #[tauri::command]
-fn app_relaunch() {
+fn app_relaunch(_app: tauri::AppHandle) {
+    #[cfg(target_os = "windows")]
+    _app.restart();
+    #[cfg(not(target_os = "windows"))]
+    {
     match std::env::current_exe() {
         Ok(exe) => {
             if let Err(e) = std::process::Command::new(&exe).spawn() {
@@ -534,6 +539,7 @@ fn app_relaunch() {
     // still sitting in the frontend's debounced save is lost, exactly as it is
     // on Cmd+Q today.
     unsafe { libc::_exit(0) };
+    }
 }
 
 fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
