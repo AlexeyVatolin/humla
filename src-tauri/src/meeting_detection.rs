@@ -224,6 +224,10 @@ mod native {
         }
     }
 
+    fn is_zoom_bundle_id(id: &str) -> bool {
+        id.starts_with("us.zoom.")
+    }
+
     fn is_zoom(object: AudioObjectID) -> bool {
         let mut value: *mut CFString = null_mut();
         if !read(object, kAudioProcessPropertyBundleID, &mut value) {
@@ -231,7 +235,7 @@ mod native {
         }
         let Some(value) = NonNull::new(value) else { return false };
         let id = unsafe { CFRetained::from_raw(value) }.to_string();
-        id == "us.zoom.xos" || id.starts_with("us.zoom.xos.") || id == "us.zoom.CptHost"
+        is_zoom_bundle_id(&id)
     }
 
     fn running(object: AudioObjectID) -> bool {
@@ -336,6 +340,16 @@ mod native {
                 }
             }
         });
+    }
+
+    #[test]
+    fn recognizes_current_and_legacy_zoom_audio_processes() {
+        for id in ["us.zoom.xos", "us.zoom.caphost", "us.zoom.CptHost", "us.zoom.xos.helper"] {
+            assert!(is_zoom_bundle_id(id), "{id}");
+        }
+        for id in ["", "com.apple.WebKit", "us.zoom", "us.zoomxos", "com.example.us.zoom.caphost"] {
+            assert!(!is_zoom_bundle_id(id), "{id}");
+        }
     }
 
     #[cfg(test)]
