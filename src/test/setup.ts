@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
-import { afterEach } from "vitest";
-import { cleanup, configure } from "@testing-library/react";
+import { afterEach, vi } from "vitest";
+import { act, cleanup, configure } from "@testing-library/react";
 import { mockIPC } from "@tauri-apps/api/mocks";
 
 // findBy*'s default 1s can flake under parallel test workers when a
@@ -14,8 +14,12 @@ configure({ asyncUtilTimeout: 4000 });
   unregisterListener: () => {},
 };
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  vi.useRealTimers();
+  await act(async () => {
+    cleanup();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
   // Don't clearMocks(): unmount cleanups (event unlisten etc.) resolve
   // async after afterEach and need a live invoke. Park a benign handler
   // instead; each test installs its own via mockTauri().
