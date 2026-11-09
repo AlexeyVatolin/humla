@@ -10,6 +10,22 @@ export type Release = {
 };
 
 export const releases: Release[] = [
+{
+  "version": "0.74.1-fork.19.1",
+  "date": "2026-11-09",
+  "title": "Humla for macOS and Windows",
+  "summary": "Russian transcription, local AI and Zoom meeting reminders on both platforms.",
+  "visual": "updates",
+  "paragraphs": [
+    "This version includes the latest stable Humla release, GigaAM v3 E2E-RNN-T for Russian, local model thinking controls and reminders to record Zoom meetings."
+  ],
+  "highlights": [
+    "Russian transcription with punctuation: Metal on macOS, DirectML on Windows.",
+    "Thinking controls for local summaries and chat.",
+    "Zoom meeting reminders and updates from your fork."
+  ],
+  "issues": []
+},
   {
     version: "0.73.0",
     date: "2026-10-29",
