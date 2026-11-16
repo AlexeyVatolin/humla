@@ -1,7 +1,7 @@
 {
   "name": "humla",
   "private": true,
-  "version": "0.76.0",
+  "version": "0.76.1-fork.27.1",
   "license": "MIT",
   "type": "module",
   "scripts": {
