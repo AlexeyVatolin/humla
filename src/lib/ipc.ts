@@ -656,6 +656,8 @@ export const ipc = {
   // capture slot until it lands on idle (#182) — so it is a third answer to
   // "can a capture start", not a variant of either other one.
   recordingState: () => invoke<"idle" | "recording" | "stopping">("recording_state"),
+  // Recording links are held until this frontend hears `recording_status` (#91).
+  deepLinksReady: () => invoke<void>("deep_links_ready"),
   summarizeNote: (noteId: string) => invoke<void>("summarize_note", { noteId }),
   // Regenerate a note's title from its content (#90). Resolves to the new title,
   // or null when the model gave back nothing usable — in which case the existing
@@ -798,7 +800,7 @@ export const ipc = {
   permissionsOpenSettings: (kind: PermissionKind) => invoke<void>("permissions_open_settings", { kind }),
 };
 
-export type PermissionKind = "microphone" | "screen";
+export type PermissionKind = "microphone" | "screen" | "notifications";
 export type PermissionStatus =
   | "granted"
   | "not_required"
@@ -809,6 +811,7 @@ export type PermissionStatus =
 export type PermissionsStatus = {
   microphone: PermissionStatus;
   screen: PermissionStatus;
+  notifications: PermissionStatus;
 };
 
 // ── AI chat (issues #46, #47) ────────────────────────────────────────────

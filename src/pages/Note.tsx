@@ -1,4 +1,8 @@
 import { isWindows, primaryModifier } from "../lib/platform";
+import { Link, useNavigate, useOutletContext, useParams } from "react-router-dom";
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
@@ -27,11 +31,9 @@ import {
   Users,
   X
 } from "lucide-react";
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import { Link, useNavigate, useOutletContext, useParams } from "react-router-dom";
-import remarkGfm from "remark-gfm";
 import { ChatHistoryControls } from "../components/ChatHistoryControls";
+import { PlaybackVolume } from "../components/PlaybackVolume";
+import { resumePlaybackVolume } from "../lib/playbackVolume";
 import { ChatPanel, type ChatSessionControls } from "../components/ChatPanel";
 import { ContextMenu, ContextMenuItem } from "../components/ContextMenu";
 import { NoteEditor } from "../components/Editor";
@@ -85,6 +87,15 @@ import { useWebhookSends } from "../lib/webhook";
 import { ExportModal } from "./ExportModal";
 import { SaveAudioModal } from "./SaveAudioModal";
 import { SendToWebhookModal } from "./SendToWebhookModal";
+import {
+  PANEL_FLOOR,
+  PANEL_MAX,
+  PANEL_MIN,
+  readPanelOpen,
+  readPanelWidth,
+  writePanelOpen,
+  writePanelWidth,
+} from "../lib/notePanel";
 
 // Memoized Markdown renderer. ReactMarkdown's parse step is O(N) over
 // the source string and we paint summaries that can hit 10K+ chars on
@@ -145,23 +156,14 @@ async function runTranscribe(noteId: string, scope: "pending" | "all") {
   // future surface) silently skipping it.
 }
 
-/** Context-panel width bounds, and the body column's floor.
+/** The body column's floor beside the context panel.
  *
  * `BODY_MIN` is measured, not chosen: the note toolbar's irreducible width is
  * the traffic-light gutter a collapsed sidebar spends (116px) plus a chevron,
  * three icon-only action buttons and two icon buttons — 391px in the warm
  * theme once every label has dropped (see `NoteToolbar`'s degradation steps,
  * and `scripts/measure-toolbar.js` for how to re-measure). 420 clears that with
- * ~30px spare for a future theme's wider controls.
- *
- * `PANEL_FLOOR` is below `PANEL_MIN` on purpose. On a window too narrow to give
- * both columns their nominal minimum, a panel a little under its comfortable
- * width is a better answer than a body column that cannot hold its own toolbar
- * — which is what the old flat 320–720 clamp produced, since it never looked at
- * the window at all. */
-const PANEL_MIN = 320;
-const PANEL_FLOOR = 260;
-const PANEL_MAX = 720;
+ * ~30px spare for a future theme's wider controls. */
 const BODY_MIN = 420;
 
 /** How long the body has to sit still before #90's typed-note titler fires.
@@ -345,7 +347,16 @@ export function Note() {
   const [thinkingStream, setThinkingStream] = useState<string>("");
   const [contentStream, setContentStream] = useState<string>("");
   const [thinkingExpanded, setThinkingExpanded] = useState<boolean>(true);
-  const [panelOpen, setPanelOpen] = useState<boolean>(true);
+  const [panelOpen, setPanelOpen] = useState<boolean>(readPanelOpen);
+  // Only the user's own open/close is remembered; the recording's auto-open
+  // below sets the state directly and is undone by the next note.
+  const choosePanelOpen = useCallback((open: boolean) => {
+    setPanelOpen(open);
+    writePanelOpen(open);
+  }, []);
+  useEffect(() => {
+    setPanelOpen(readPanelOpen());
+  }, [id]);
   const [activeTab, setActiveTab] = useState<"summary" | "transcript" | "chat">("summary");
   // Chat session chrome for the panel header (issue #62). ChatPanel owns all
   // chat state and publishes this projection up; the header's +/history buttons
@@ -361,27 +372,22 @@ export function Note() {
     [draft?.id],
   );
   const chatTargetKey = chatTarget ? targetKey(chatTarget) : null;
-  const [panelWidth, setPanelWidth] = useState<number>(() => {
-    const saved = typeof localStorage !== "undefined" ? Number(localStorage.getItem("humla.panelWidth")) : NaN;
-    // `PANEL_FLOOR`, not `PANEL_MIN`: a width persisted from a cramped window
-    // is legitimately under the nominal minimum, and rejecting it would reset
-    // the panel to 440 on every reopen there.
-    return saved >= PANEL_FLOOR && saved <= PANEL_MAX ? saved : 440;
-  });
+  const [panelWidth, setPanelWidth] = useState<number>(readPanelWidth);
   // The width the two columns share, watched rather than derived: it is the
   // window minus the nav card, and the nav card collapses. Drives the clamp
   // that keeps the panel from squeezing the body column past what its toolbar
-  // can survive — see PANEL_MIN / BODY_MIN.
-  const columnsRef = useRef<HTMLDivElement | null>(null);
+  // can survive — see PANEL_MIN / BODY_MIN. A state ref, because the columns
+  // only mount once the note has loaded; measured before paint, or the panel
+  // draws uncapped and then animates down to the cap.
+  const [columnsEl, setColumnsEl] = useState<HTMLDivElement | null>(null);
   const [columnsWidth, setColumnsWidth] = useState(0);
-  useEffect(() => {
-    const el = columnsRef.current;
-    if (!el) return;
-    setColumnsWidth(el.clientWidth);
+  useLayoutEffect(() => {
+    if (!columnsEl) return;
+    setColumnsWidth(columnsEl.clientWidth);
     const ro = new ResizeObserver(([entry]) => setColumnsWidth(entry.contentRect.width));
-    ro.observe(el);
+    ro.observe(columnsEl);
     return () => ro.disconnect();
-  }, []);
+  }, [columnsEl]);
   // How wide the panel may actually be right now. Before #146 the drag handler
   // clamped to a flat 320–720 with no regard for the window, so on a
   // minimum-size window the panel could be dragged over the whole view and
@@ -606,11 +612,7 @@ export function Note() {
     };
     const onUp = () => {
       setResizing(false);
-      try {
-        localStorage.setItem("humla.panelWidth", String(panelWidthRef.current));
-      } catch {
-        /* ignore */
-      }
+      writePanelWidth(panelWidthRef.current);
     };
     document.body.style.userSelect = "none";
     document.body.style.cursor = "col-resize";
@@ -1007,7 +1009,7 @@ export function Note() {
   const authorInitial = (authorName ?? "?").slice(0, 1).toUpperCase();
 
   return (
-    <div ref={columnsRef} className="h-full flex min-h-0">
+    <div ref={setColumnsEl} className="h-full flex min-h-0">
       {/* Body column — toolbar + scrollable writing area. The context
           panel is a sibling card to the right; closing it widens the body
           into a focus-writing mode. */}
@@ -1020,7 +1022,7 @@ export function Note() {
           recActive={recActive}
           recordBlock={recordBlock}
           panelOpen={panelOpen}
-          onTogglePanel={() => setPanelOpen((v) => !v)}
+          onTogglePanel={() => choosePanelOpen(!panelOpen)}
           onSummarizeFailed={clearSummaryStream}
           onRegenerateTitle={regenerateTitle}
           flushEdits={flushSave}
@@ -1267,7 +1269,7 @@ export function Note() {
             )}
             <button
               type="button"
-              onClick={() => setPanelOpen(false)}
+              onClick={() => choosePanelOpen(false)}
               title="Close panel"
               aria-label="Close panel"
               className="nd-btn-icon"
@@ -3419,18 +3421,24 @@ export const TranscriptPlayer = memo(function TranscriptPlayer({
             is reads as nagging. The greyed re-diarize control's tooltip still
             names it, for the case where someone wants the capability back. */}
         {audioAvailable ? (
-          <audio
-            ref={audioRef}
-            src={activeUrl ?? undefined}
-            controls
-            // preload="auto" so the whole WAV streams in up-front and
-            // every subsequent seek is in-memory. With "metadata" each
-            // user click triggered a range-request through Tauri's
-            // asset protocol; rapid clicking flooded I/O and on at
-            // least one user's machine made the whole system lag.
-            preload="auto"
-            className="flex-1 h-8"
-          />
+          <>
+            <audio
+              ref={audioRef}
+              src={activeUrl ?? undefined}
+              controls
+              // preload="auto" so the whole WAV streams in up-front and
+              // every subsequent seek is in-memory. With "metadata" each
+              // user click triggered a range-request through Tauri's
+              // asset protocol; rapid clicking flooded I/O and on at
+              // least one user's machine made the whole system lag.
+              preload="auto"
+              // Lets the volume boost read the samples; the asset protocol answers CORS.
+              crossOrigin="anonymous"
+              onPlay={(e) => resumePlaybackVolume(e.currentTarget)}
+              className="nd-player flex-1 h-8"
+            />
+            <PlaybackVolume audioRef={audioRef} src={activeUrl} />
+          </>
         ) : (
           <p className="flex-1 text-xs text-[var(--color-text-muted)]">
             {keepAudio

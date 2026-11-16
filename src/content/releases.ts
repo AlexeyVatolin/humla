@@ -11,6 +11,40 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "0.76.0",
+    date: "2026-11-15",
+    title: "Start recording from a link",
+    summary: "Shortcuts, Raycast or a script can now start and stop a recording, and playback is louder.",
+    paragraphs: [
+      "Humla now answers three links: humla://record/start starts a recording in a new note, humla://record/start?name=Weekly%20sync names that note, and humla://record/stop stops it. Anything that can open a link can use them, like Apple Shortcuts, Raycast or a script, so a calendar automation can record your meetings without Humla knowing about your calendar. Every link tells you what it did in a notification, including when it couldn't do anything, for example because a recording is still being saved.",
+      "Humla now asks for permission to show notifications, during setup and in Settings → Recording → Permissions, next to the microphone and screen. Before, the first notification could turn into macOS's permission question and get lost.",
+      "Playback was much quieter than the recording itself. Recordings are now levelled for listening, and the player has a volume control that goes up to 400%, so older recordings can be turned up too. The audio Humla keeps for playback also takes about an eighth of the space it used to. Older recordings keep working as before.",
+    ],
+    highlights: [
+      "Start and stop a recording from a humla:// link.",
+      "Humla asks for notification permission.",
+      "Louder playback, with a volume control up to 400%.",
+      "Playback audio takes about an eighth of the space.",
+    ],
+    issues: [
+      { title: "Deep links + Apple Shortcuts: humla://record/start", reference: "#91", status: "Closed", url: "https://github.com/michaelwilhelmsen/humla/issues/91" },
+      { title: "Actionable macOS notifications via UNUserNotificationCenter", reference: "#85", status: "Closed", url: "https://github.com/michaelwilhelmsen/humla/issues/85" },
+      { title: "Feature Request - Volume Slider", reference: "#234", status: "Closed", url: "https://github.com/michaelwilhelmsen/humla/issues/234" },
+      { title: "Store a take's playback audio as M4A instead of WAV", reference: "#226", status: "Closed", url: "https://github.com/michaelwilhelmsen/humla/issues/226" },
+    ],
+  },
+  {
+    version: "0.75.0",
+    date: "2026-11-10",
+    title: "Multichannel microphones and panel preferences",
+    summary: "Humla uses the first microphone channel and remembers the side panel state.",
+    paragraphs: ["Multichannel microphones such as the Focusrite Vocaster Two now record from the first input. Humla restores the side panel's open or closed state."],
+    highlights: ["Record from the first microphone channel.", "Restore the side panel state."],
+    issues: [
+      { title: "Silent microphone capture from Vocaster Two USB (14-channel input) on macOS", reference: "#231", status: "Closed", url: "https://github.com/michaelwilhelmsen/humla/issues/231" },
+    ],
+  },
+  {
     version: "0.73.0",
     date: "2026-10-29",
     title: "Use any OpenAI-compatible API",

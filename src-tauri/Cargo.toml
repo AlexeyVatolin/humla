@@ -1,6 +1,6 @@
 [package]
 name = "humla"
-version = "0.74.0"
+version = "0.76.0"
 description = "Humla — personal meeting notes that hum along"
 authors = ["Michael Wilhelmsen"]
 edition = "2021"
@@ -93,6 +93,10 @@ whisper-rs = { version = "0.16", features = ["metal", "raw-api"] }
 objc2-core-audio = { version = "0.3.2", default-features = false, features = ["std", "AudioHardware"] }
 objc2-core-foundation = "0.3.2"
 objc2-app-kit = "0.3.2"
+block2 = "0.6"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSError", "NSSet", "NSString"] }
+objc2-user-notifications = { version = "0.3", default-features = false, features = ["std", "block2", "UNNotification", "UNNotificationAction", "UNNotificationCategory", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationSettings", "UNNotificationTrigger", "UNUserNotificationCenter"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 humla-windows = { path = "crates/windows" }

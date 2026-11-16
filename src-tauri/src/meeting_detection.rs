@@ -122,11 +122,12 @@ pub async fn meeting_prompt_start(app: AppHandle) -> Result<(), String> {
         dismiss(&app);
         return Err("Zoom is no longer using the microphone.".into());
     }
-    if !menubar::can_start(&app) {
+    if !menubar::claim_start(&app) {
         dismiss(&app);
         return Err("A recording is already in progress.".into());
     }
-    menubar::headless_start(&app).await?;
+    let title = menubar::headless_note_title(chrono::Local::now());
+    menubar::headless_start(&app, &title).await?;
     dismiss(&app);
     Ok(())
 }

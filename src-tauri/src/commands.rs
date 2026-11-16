@@ -3,7 +3,7 @@ use crate::diarize;
 use crate::local_whisper;
 use crate::sessions;
 use crate::wav;
-use crate::recording::{CaptureSink, ChunkRecord, ChunkSource, DiagnosticPayload, ErrorPayload, Inflight, Phase, RecordingStatus, ReplayProgress, ReplayTakeTimings, ReplayTimings, SidecarEvent, SinkMode, Step, StepReport, TakeWork, TranscriptPayload};
+use crate::recording::{CaptureSink, ChunkRecord, ChunkSource, DiagnosticPayload, ErrorPayload, Inflight, Phase, RecordingStatus, ReplayProgress, ReplayTakeTimings, ReplayTimings, SidecarEvent, SinkMode, StartClaim, Step, StepReport, TakeWork, TranscriptPayload};
 use crate::AppState;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -1115,7 +1115,7 @@ pub fn note_sessions(app: AppHandle, note_id: String) -> Result<Vec<NoteSession>
             started_at: e.started_at,
             duration_ms: e.duration_ms,
             streams: e.streams,
-            has_playback: dir.join("playback.wav").exists(),
+            has_playback: sessions::playback_file(&dir).is_some(),
             can_transcribe: !e.transcribed && sessions::session_has_replayable_audio(&dir),
             can_retranscribe: sessions::session_has_replayable_audio(&dir),
         })
@@ -1152,7 +1152,7 @@ pub fn notes_with_recordings(app: AppHandle) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
-/// Path to a specific session's `playback.wav`, or `None` when absent. The
+/// Path to a specific session's playback audio, or `None` when absent. The
 /// frontend feeds this through `convertFileSrc` into the `<audio>` element
 /// when the user switches the carousel to that session.
 #[tauri::command]
@@ -1166,11 +1166,7 @@ pub fn note_session_playback_path(
     let Some(dir) = sessions::resolve_session_dir(&recordings, &session_id) else {
         return Ok(None);
     };
-    let path = dir.join("playback.wav");
-    if !path.exists() {
-        return Ok(None);
-    }
-    Ok(path.to_str().map(|s| s.to_string()))
+    Ok(sessions::playback_file(&dir).and_then(|p| p.to_str().map(str::to_string)))
 }
 
 /// Parse a `timeline.jsonl` into raw JSON values, skipping blank/malformed
@@ -2530,62 +2526,30 @@ pub fn recording_state(state: State<AppState>) -> Result<&'static str, String> {
     Ok(if s.note_id.is_some() { "recording" } else { "idle" })
 }
 
+/// Stop a sidecar left behind by a session that never went through
+/// `recording_stop`: SIGTERM, a short grace, then kill.
+async fn stop_stale_child(mut c: tokio::process::Child) {
+    if let Some(pid) = c.id() {
+        stop_capture_process(pid);
+    }
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), c.wait()).await;
+    let _ = c.kill().await;
+}
+
 #[tauri::command]
 pub async fn recording_start(
     app: AppHandle,
     state: State<'_, AppState>,
     note_id: String,
 ) -> Result<(), String> {
-    // A stop in progress owns the slot until its chain lands on Idle (#182).
-    // Refused here, in the backend, and not only in the UI: the self-heal
-    // below reads a taken `child` as a dead one, so without this check a
-    // `recording_start` arriving mid-drain would take over and clear
-    // `chunk_log` before the previous stop had snapshotted it — losing the
-    // tail of that meeting's audio.
-    if let Some(msg) = state.recording.lock().stop_in_progress() {
-        return Err(msg.into());
-    }
-
-    // Self-heal stale sessions before refusing. We get here when the
-    // session struct still has note_id set — could be a real recording
-    // in progress, or a zombie left behind by a dev reload / app crash
-    // that didn't flow through recording_stop.
-    //
-    // - If the tracked child has already exited → pure garbage, clear it.
-    // - If the child is still running but its reader handle is gone (the
-    //   stdout pipe was closed without recording_stop running) → orphan,
-    //   SIGTERM it and take over.
-    // - Only when both child AND reader are alive do we treat it as a
-    //   genuine concurrent recording and refuse.
-    let stale_child: Option<tokio::process::Child> = {
-        let mut s = state.recording.lock();
-        if s.note_id.is_some() {
-            let child_dead = match s.child.as_mut() {
-                Some(c) => matches!(c.try_wait(), Ok(Some(_)) | Err(_)),
-                None => true,
-            };
-            let reader_dead = s.reader.as_ref().map_or(true, |r| r.is_finished());
-
-            if !child_dead && !reader_dead {
-                return Err("already recording".into());
-            }
-
-            let stale = s.child.take();
-            s.note_id = None;
-            s.temp_dir = None;
-            s.reader = None;
-            s.inflight = Arc::new(parking_lot::Mutex::new(Vec::new()));
-            stale
-        } else {
-            None
-        }
-    };
-    if let Some(mut c) = stale_child {
-        if let Some(pid) = c.id() {
-            stop_capture_process(pid);
-        }
-        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), c.wait()).await;
-        let _ = c.kill().await;
+    // Claimed before any of the checks below, which can take seconds: a second
+    // start inside that gap must find the slot taken, or its sidecar would
+    // replace this one's. A stop in progress refuses too (#182), since the
+    // self-heal reads a taken `child` as a dead one and would clear
+    // `chunk_log` before that stop had snapshotted it.
+    let (claim, stale_child) = StartClaim::take(&state.recording, "already recording")?;
+    if let Some(c) = stale_child {
+        stop_stale_child(c).await;
     }
 
     // A deferred transcription on *this* note is the one thing that can't
@@ -2629,13 +2593,13 @@ pub async fn recording_start(
     };
 
     // Pre-check microphone permission — without it we can't capture anything useful.
-    if let Ok(p) = permissions_status(app.clone()).await {
+    if let Ok(p) = capture_permissions(&app).await {
         if p.microphone != "granted" {
             let msg = "Microphone permission required. Open Settings → Permissions to grant.".to_string();
             emit_error(&app, Some(&note_id), &msg);
             return Err(msg);
         }
-        if p.screen != "granted" {
+        if !matches!(p.screen.as_str(), "granted" | "not_required") {
             emit_error(&app, Some(&note_id),
                 "Screen Recording not granted — only your microphone will be captured. Grant in Settings → Permissions and restart for the full meeting transcript.");
         }
@@ -2815,7 +2779,13 @@ pub async fn recording_start(
         }
     });
 
-    state.recording.lock().reader = Some(reader_handle);
+    // Committed only with the reader in place: until then a start would read
+    // this capture's live child with no reader as an orphan and stop it.
+    {
+        let mut s = state.recording.lock();
+        s.reader = Some(reader_handle);
+        claim.commit(&mut s);
+    }
 
     emit_status(&app, Some(&note_id), Phase::Recording);
     Ok(())
@@ -3824,39 +3794,12 @@ pub async fn import_audio(
         return Err(format!("File not found: {path}"));
     }
 
-    // Same single-slot self-heal + refusal as recording_start: import and live
-    // recording share the one capture slot — including while the previous
-    // capture's stop chain still holds it (#182).
-    if let Some(msg) = state.recording.lock().stop_in_progress() {
-        return Err(msg.into());
-    }
-    let stale_child: Option<tokio::process::Child> = {
-        let mut s = state.recording.lock();
-        if s.note_id.is_some() {
-            let child_dead = match s.child.as_mut() {
-                Some(c) => matches!(c.try_wait(), Ok(Some(_)) | Err(_)),
-                None => true,
-            };
-            let reader_dead = s.reader.as_ref().map_or(true, |r| r.is_finished());
-            if !child_dead && !reader_dead {
-                return Err("already recording or importing".into());
-            }
-            let stale = s.child.take();
-            s.note_id = None;
-            s.temp_dir = None;
-            s.reader = None;
-            s.inflight = Arc::new(parking_lot::Mutex::new(Vec::new()));
-            stale
-        } else {
-            None
-        }
-    };
-    if let Some(mut c) = stale_child {
-        if let Some(pid) = c.id() {
-            stop_capture_process(pid);
-        }
-        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), c.wait()).await;
-        let _ = c.kill().await;
+    // Import and live recording share the one capture slot, claimed the same
+    // way `recording_start` claims it.
+    let (claim, stale_child) =
+        StartClaim::take(&state.recording, "already recording or importing")?;
+    if let Some(c) = stale_child {
+        stop_stale_child(c).await;
     }
 
     // Create the destination note now so provider-prereq errors can attach to
@@ -4011,7 +3954,13 @@ pub async fn import_audio(
         finish_import(&app_clone, &note_id_clone).await;
     });
 
-    state.recording.lock().reader = Some(reader_handle);
+    // Committed only with the reader in place: until then a start would read
+    // this capture's live child with no reader as an orphan and stop it.
+    {
+        let mut s = state.recording.lock();
+        s.reader = Some(reader_handle);
+        claim.commit(&mut s);
+    }
 
     Ok(note)
 }
@@ -5410,14 +5359,13 @@ fn normalize_tokens(s: &str) -> Vec<String> {
         .collect()
 }
 
-/// Build the playback-asset bundle for a recording: a single mixed
-/// `playback.wav` plus a `timeline.jsonl` mapping each speaker turn
-/// back to its first-chunk start_ms, so the frontend can render the
-/// transcript with chunk spans and highlight whichever one matches the
-/// audio's current position.
+/// Build the playback-asset bundle for a recording: the mixed playback audio
+/// plus a `timeline.jsonl` mapping each speaker turn back to its first-chunk
+/// start_ms, so the frontend can render the transcript with chunk spans and
+/// highlight whichever one matches the audio's current position.
 ///
-/// `playback.wav` is gated on `keep_audio` (#24) — it is a full recording of
-/// the meeting, so writing it while the setting said "keep nothing" was the
+/// The playback audio is gated on `keep_audio` (#24) — it is a full recording
+/// of the meeting, so writing it while the setting said "keep nothing" was the
 /// dishonesty that issue names. `timeline.jsonl` is written either way: it is
 /// text (word timings), and the merged reader and session dividers are built
 /// from it whether or not there is anything to play.
@@ -5438,8 +5386,8 @@ async fn write_playback_assets(
     };
 
     if keep_audio_enabled(app) {
-        if let Err(e) = build_playback_wav(mic_wav, sys_wav, &target.join("playback.wav")).await {
-            eprintln!("playback: build_playback_wav: {e}");
+        if let Err(e) = build_playback(mic_wav, sys_wav, &target).await {
+            eprintln!("playback: build_playback: {e}");
         }
     }
 
@@ -5450,37 +5398,72 @@ async fn write_playback_assets(
     }
 }
 
-/// Combine the per-source full WAVs into a single mono 16-kHz WAV the
-/// `<audio>` element can play. Mixes equal-weight when both streams are
-/// present; copies the byte stream when only one exists. Equal weight
-/// is the right default — the user is more interested in hearing both
-/// sides at the same level than in any acoustic faithfulness, and the
-/// upstream streams have already gone through their own gain stages.
-async fn build_playback_wav(
+/// AAC at this rate is about 0.24 MB a minute for 16 kHz mono speech, against
+/// 1.9 MB for the WAV it replaces (#226).
+#[cfg(target_os = "macos")]
+const PLAYBACK_AAC_BITRATE: &str = "32000";
+
+/// Write a take's playback audio into `session_dir`: the per-source full WAVs
+/// mixed and levelled (`playback_mix`), encoded as `playback.m4a`. A take
+/// holds one playback file, so the other format is removed once this one is
+/// in place. If the encoder fails, the take keeps a `playback.wav` instead.
+async fn build_playback(
     mic: Option<&std::path::Path>,
     sys: Option<&std::path::Path>,
-    out: &std::path::Path,
+    session_dir: &std::path::Path,
 ) -> anyhow::Result<()> {
-    match (mic, sys) {
-        (Some(m), Some(s)) => {
-            let mic_samples = wav::read_f32_mono_16k(m).await?;
-            let sys_samples = wav::read_f32_mono_16k(s).await?;
-            let n = mic_samples.len().max(sys_samples.len());
-            let mut mixed = Vec::with_capacity(n);
-            for i in 0..n {
-                let a = mic_samples.get(i).copied().unwrap_or(0.0);
-                let b = sys_samples.get(i).copied().unwrap_or(0.0);
-                mixed.push((a + b) * 0.5);
-            }
-            wav::write_pcm16_mono_16k(out, &mixed).await?;
+    if mic.is_none() && sys.is_none() {
+        return Ok(());
+    }
+    let mic_samples = match mic {
+        Some(m) => wav::read_f32_mono_16k(m).await?,
+        None => Vec::new(),
+    };
+    let sys_samples = match sys {
+        Some(s) => wav::read_f32_mono_16k(s).await?,
+        None => Vec::new(),
+    };
+    let mixed = tokio::task::spawn_blocking(move || {
+        let mut mixed = crate::playback_mix::mix(mic_samples, sys_samples);
+        crate::playback_mix::level(&mut mixed);
+        mixed
+    })
+    .await?;
+
+    let wav_out = session_dir.join(".playback.wav.partial");
+    wav::write_pcm16_mono_16k(&wav_out, &mixed).await?;
+    drop(mixed);
+    #[cfg(target_os = "macos")]
+    let m4a_out = session_dir.join(".playback.m4a.partial");
+    #[cfg(target_os = "macos")]
+    let (keep, from, drop_other) = match encode_aac(&wav_out, &m4a_out).await {
+        Ok(()) => ("playback.m4a", &m4a_out, "playback.wav"),
+        Err(e) => {
+            eprintln!("playback: AAC encode failed, keeping WAV: {e}");
+            ("playback.wav", &wav_out, "playback.m4a")
         }
-        (Some(m), None) => {
-            tokio::fs::copy(m, out).await?;
-        }
-        (None, Some(s)) => {
-            tokio::fs::copy(s, out).await?;
-        }
-        (None, None) => {}
+    };
+    #[cfg(not(target_os = "macos"))]
+    let (keep, from, drop_other) = ("playback.wav", &wav_out, "playback.m4a");
+    let result = tokio::fs::rename(from, session_dir.join(keep)).await;
+    let _ = tokio::fs::remove_file(&wav_out).await;
+    #[cfg(target_os = "macos")]
+    let _ = tokio::fs::remove_file(&m4a_out).await;
+    result?;
+    let _ = tokio::fs::remove_file(session_dir.join(drop_other)).await;
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+async fn encode_aac(wav: &std::path::Path, m4a: &std::path::Path) -> anyhow::Result<()> {
+    let out = tokio::process::Command::new("/usr/bin/afconvert")
+        .args(["-f", "m4af", "-d", "aac", "-b", PLAYBACK_AAC_BITRATE])
+        .arg(wav)
+        .arg(m4a)
+        .output()
+        .await?;
+    if !out.status.success() {
+        anyhow::bail!("afconvert: {}", String::from_utf8_lossy(&out.stderr).trim());
     }
     Ok(())
 }
@@ -11272,5 +11255,47 @@ mod device_name_tests {
     fn a_short_device_name_is_returned_verbatim() {
         assert_eq!(clamp_device_name("MacBook Pro-mikrofon"), "MacBook Pro-mikrofon");
         assert_eq!(clamp_device_name(""), "");
+    }
+}
+
+#[cfg(test)]
+mod playback_tests {
+    use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn a_take_s_playback_is_written_as_aac_and_replaces_its_wav() {
+        let dir = tempfile::tempdir().unwrap();
+        let mic = dir.path().join("mic-full.wav");
+        let tone: Vec<i16> = (0..32_000).map(|i| ((i as f32 * 0.05).sin() * 3_000.0) as i16).collect();
+        wav::write_i16_mono_16k(&mic, &tone).await.unwrap();
+        let take = dir.path().join("take");
+        std::fs::create_dir_all(&take).unwrap();
+        std::fs::write(take.join("playback.wav"), b"an older take's playback").unwrap();
+
+        build_playback(Some(&mic), None, &take).await.unwrap();
+
+        let mut names: Vec<String> = std::fs::read_dir(&take)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        assert_eq!(names, vec!["playback.m4a"], "one playback file, no partials left");
+        let decoded = dir.path().join("decoded.wav");
+        let status = std::process::Command::new("/usr/bin/afconvert")
+            .args(["-f", "WAVE", "-d", "LEI16@16000"])
+            .arg(take.join("playback.m4a"))
+            .arg(&decoded)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        assert_eq!(wav::read_i16_mono_16k(&decoded).await.unwrap().len(), tone.len());
+    }
+
+    #[tokio::test]
+    async fn no_streams_writes_no_playback() {
+        let dir = tempfile::tempdir().unwrap();
+        build_playback(None, None, dir.path()).await.unwrap();
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
     }
 }

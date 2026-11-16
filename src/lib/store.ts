@@ -398,7 +398,9 @@ export function bindBackendListeners() {
     } else if (s.phase === "importing") {
       if (s.noteId) importingNoteId = s.noteId;
     }
-  });
+  })
+    .then(() => ipc.deepLinksReady())
+    .catch((e) => console.warn("recording links not released", e));
   onTitleStatus(({ noteId, active }) => {
     useRecordingStore.getState().setTitling(noteId, active);
   });
