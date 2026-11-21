@@ -2,10 +2,9 @@ name: Sync upstream release and publish
 
 on:
   schedule:
-    - cron: '17 3 * * *'
+    # Keep at least four days between runs, including across month boundaries.
+    - cron: '17 12 1-25/4 * *'
   workflow_dispatch:
-  push:
-    branches: [local]
 
 permissions:
   contents: write
