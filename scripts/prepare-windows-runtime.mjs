@@ -60,7 +60,7 @@ const env = {
   SHERPA_ONNXRUNTIME_INCLUDE_DIR: path.join(ort, 'build/native/include'),
   SHERPA_ONNXRUNTIME_LIB_DIR: native,
 };
-run('cmake', ['-S', source, '-B', build, '-G', 'Ninja', ...options,
+run('cmake', ['--fresh', '-S', source, '-B', build, '-G', 'Ninja', ...options,
   `-DFETCHCONTENT_SOURCE_DIR_DIRECTML=${dml}`,
   `-Dlocation_onnxruntime_lib2=${path.join(native, 'onnxruntime.lib')}`,
   `-DCMAKE_INSTALL_PREFIX=${path.join(cache, 'installed')}`], { env });
