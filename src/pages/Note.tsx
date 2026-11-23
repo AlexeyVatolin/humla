@@ -789,11 +789,13 @@ export function Note() {
     if (!draft) return;
     let cancelled = false;
     (async () => {
-      let [path, tl, sess] = await Promise.all([
+      const [path, initialTimeline, initialSessions] = await Promise.all([
         ipc.notePlaybackPath(draft.id).catch(() => null),
         ipc.noteTimeline(draft.id).catch((): TimelineEntry[] => []),
         ipc.noteSessions(draft.id).catch((): NoteSession[] => []),
       ]);
+      let tl = initialTimeline;
+      let sess = initialSessions;
       if (cancelled) return;
 
       // Repair before rendering (#169). Transcript text that no session
@@ -828,7 +830,6 @@ export function Note() {
       if (repair.repaired) {
         tl = await ipc.noteTimeline(draft.id).catch(() => tl);
         sess = await ipc.noteSessions(draft.id).catch(() => sess);
-        if (!readOnlyRef.current)
         if (cancelled) return;
       }
       setTimelineCoversTranscript(repair.coversTranscript);
