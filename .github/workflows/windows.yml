@@ -50,8 +50,6 @@ jobs:
         with:
           ref: ${{ steps.source.outputs.ref }}
       - uses: pnpm/action-setup@v6.1.1
-        with:
-          version: 10
       - uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
