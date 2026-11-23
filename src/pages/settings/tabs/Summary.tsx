@@ -1,8 +1,8 @@
+import { useEffect, useState } from "react";
 import { open as openExternal } from "@tauri-apps/plugin-shell";
 import { Row, Section } from "../components/Section";
 import { Select } from "../../../components/ui/Select";
 import { Toggle } from "../components/Toggle";
-import { SummaryPromptsManager } from "../components/SummaryPromptsManager";
 import { OllamaConnect } from "../../../components/provider/OllamaConnect";
 import { ProviderKeyCard } from "../../../components/provider/ProviderKeyCard";
 import { CommandSnippet } from "../../../components/CommandSnippet";
@@ -14,12 +14,27 @@ import { CopilotCard } from "../../../components/provider/CopilotCard";
 import { CustomEndpointCard, CustomModelField } from "../../../components/provider/CustomEndpoint";
 import { useCopilotStatus } from "../../../components/provider/useCopilot";
 import { SUMMARY_PROVIDERS } from "../types";
+import { ipc, type SummaryPrompt } from "../../../lib/ipc";
 import type { SettingsHook } from "../useSettings";
 
 export function SummaryTab({
   s,
   update,
-}: Pick<SettingsHook, "s" | "update">) {
+  onOpenTemplates,
+}: Pick<SettingsHook, "s" | "update"> & { onOpenTemplates?: () => void }) {
+  const [templates, setTemplates] = useState<SummaryPrompt[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    ipc
+      .summaryPromptsList()
+      .then((next) => {
+        if (!cancelled) setTemplates(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const isLocal = s.summary_provider === "local";
   const isAnthropic = s.summary_provider === "anthropic";
   // Called unconditionally (rules of hooks) and inert until that provider is
@@ -56,7 +71,6 @@ export function SummaryTab({
           <>
             <Row
               label="Model"
-              description="Reasoning models (gpt-5 and later, o-series) are handled automatically."
               control={
                 <Select
                   value={s.summary_model}
@@ -73,7 +87,6 @@ export function SummaryTab({
           <>
             <Row
               label="Model"
-              description="Claude models. Each model's own adaptive thinking decides how much it reasons."
               control={
                 <Select
                   value={s.anthropic_model}
@@ -91,7 +104,7 @@ export function SummaryTab({
             copilot={copilot}
             model={s.copilot_model}
             onModelChange={(v) => update("copilot_model", v)}
-            modelDescription="Used for summaries and titles. Auto lets Copilot pick."
+            modelDescription="Also used for titles."
           />
         )}
 
@@ -105,7 +118,7 @@ export function SummaryTab({
             <CustomModelField
               value={s.custom_model}
               onChange={(v) => update("custom_model", v)}
-              description="Used for summaries and titles. Sent with no temperature or token limit, so the endpoint's own defaults apply."
+              description="Also used for titles. The endpoint's own defaults apply."
             />
           </>
         )}
@@ -120,8 +133,7 @@ export function SummaryTab({
             />
             <div className="py-3 space-y-2">
               <p className="text-xs text-[var(--color-text-muted)]">
-                Works with Ollama, LM Studio (<code>http://localhost:1234/v1</code>),
-                <code> llama-server</code>, and vLLM. Don't have one yet?{" "}
+                Don't have a server?{" "}
                 <button
                   type="button"
                   onClick={() => openExternal("https://ollama.com/download")}
@@ -157,23 +169,29 @@ export function SummaryTab({
         )}
 
         <Row
-          label="Default preset"
-          description='Which preset new notes start with. Each note can switch to a different preset (or "Custom") from its own header.'
+          label="Default template"
+          description={
+            onOpenTemplates && (
+              <button
+                type="button"
+                onClick={onOpenTemplates}
+                className="underline hover:text-[var(--color-text)]"
+              >
+                Edit templates
+              </button>
+            )
+          }
           control={
             <Select
               value={s.default_summary_preset}
               onChange={(v) => update("default_summary_preset", v)}
-              options={SUMMARY_PRESETS.map((p) => ({
-                value: p.value,
-                label: presetLabel(p),
-              }))}
+              options={[
+                ...SUMMARY_PRESETS.map((p) => ({ value: p.value, label: presetLabel(p) })),
+                ...templates.map((t) => ({ value: `custom:${t.id}`, label: t.name })),
+              ]}
             />
           }
         />
-      </Section>
-
-      <Section title="Summary prompts">
-        <SummaryPromptsManager language={s.language} />
       </Section>
     </>
   );

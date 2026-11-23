@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: staged-diff
+        name: Check staged diff
+        entry: git diff --cached --check
+        language: system
+        pass_filenames: false
+        always_run: true

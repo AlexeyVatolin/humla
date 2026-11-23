@@ -22,9 +22,7 @@ export function RecordingSection({
   return (
     <>
       <Section title="Permissions">
-        <div className="py-3.5">
-          <Permissions />
-        </div>
+        <Permissions />
       </Section>
 
       <Section title="Audio retention">
@@ -37,8 +35,8 @@ export function RecordingSection({
           // text names the cost — no playback, no re-detection.
           description={
             keeping
-              ? "Keep recordings for playback and speaker re-detection. Roughly 1 MB per minute per channel."
-              : "No audio is stored on this device — transcript only; playback and speaker re-detection unavailable."
+              ? "For playback and speaker re-detection. About 2 MB per minute per source."
+              : "Transcript only. No playback or speaker re-detection."
           }
           control={
             <Toggle
@@ -124,7 +122,7 @@ export function RecordingSection({
         />
         <Row
           label="Record shortcut"
-          description="Starts and stops a recording from any app. With a note open it records that note; otherwise it starts a new one."
+          description="Start and stop a recording from any app."
           control={<HotkeyField />}
         />
       </Section>
@@ -181,7 +179,7 @@ function StoredAudioCleanup() {
     return (
       <Row label="Stored audio">
         <p className="text-xs text-[var(--color-text-muted)]">
-          No audio stored — transcripts and speaker labels are untouched.
+          No audio stored.
         </p>
       </Row>
     );
@@ -190,7 +188,7 @@ function StoredAudioCleanup() {
   return (
     <Row
       label="Stored audio"
-      description={`${stats.notes} note${plural(stats.notes)} · ${formatBytes(stats.bytes)}. Deleting keeps every transcript, speaker label and timeline — only the audio goes.`}
+      description={`${stats.notes} note${plural(stats.notes)} · ${formatBytes(stats.bytes)}. Transcripts stay.`}
       control={
         <div className="flex flex-col items-end gap-1">
           {armed ? (

@@ -20,7 +20,7 @@ import { inputClass, type EditableKey } from "../types";
 // Nothing here reads the Keychain until the switch is on, so a user who never
 // turns it on is never asked for Keychain access on its behalf.
 
-const DOCS_URL = "https://github.com/michaelwilhelmsen/humla/blob/main/docs/webhooks.md";
+const DOCS_URL = "https://humla.team/docs/integrations/webhooks#payload-schema-version-1";
 
 /** One header row. A header loaded from the saved endpoint arrives with its
  *  name only (`stored`); left empty, its value stays what was saved. */
@@ -52,7 +52,7 @@ export function WebhookRows({
     <>
       <Row
         label="Send notes to a webhook"
-        description="Adds Send to webhook… to each note’s ⋯ menu, so your own tools can receive a meeting as JSON. A note is sent only when you send it, after you confirm where."
+        description="Adds Send to webhook… to each note’s ⋯ menu. A note is sent only when you send it."
         control={
           <Toggle
             checked={enabled}
@@ -149,8 +149,7 @@ function EndpointForm() {
       </Row>
       <Row label="Headers">
         <p className="text-xs text-[var(--color-text-muted)] mb-2">
-          Optional, for authentication — for example Authorization with Bearer and your token.
-          Saved values aren’t shown again; leave one empty to keep it.
+          Saved values aren’t shown again. Leave one empty to keep it.
         </p>
         <div className="space-y-2">
           {headers.map((header, index) => (

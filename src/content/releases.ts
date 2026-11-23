@@ -3,13 +3,72 @@ export type Release = {
   date: string;
   title: string;
   summary: string;
-  visual?: "filters" | "privacy" | "activity" | "updates" | "speakers" | "webhook" | "export" | "two-factor" | "date" | "audio" | "copilot" | "custom";
+  visual?: "filters" | "privacy" | "activity" | "updates" | "speakers" | "webhook" | "export" | "two-factor" | "date" | "audio" | "copilot" | "custom" | "system-audio";
   paragraphs: string[];
   highlights: string[];
   issues: { title: string; reference: string; status: "Open" | "Closed"; url: string }[];
 };
 
 export const releases: Release[] = [
+  {
+    version: "0.81.0",
+    date: "2026-11-19",
+    title: "Record calls without Screen Recording",
+    summary: "On macOS 14.2 and later, Humla records the other side of a call straight from the Mac's audio, so it no longer needs Screen Recording.",
+    visual: "system-audio",
+    paragraphs: [
+      "To hear the other side of a meeting, Humla used to open a screen recording and throw the picture away. macOS still treated that as recording your screen: the menu bar showed it during every meeting, and every so often macOS asked whether Humla could keep doing it. On macOS 14.2 and later, Humla now reads the audio your Mac plays directly, with the System audio permission instead. Nothing on your screen is captured.",
+      "It also fixes calls where the other side went missing. On macOS 26, a long screen recording could keep running while its sound had gone silent, and everything said after that point was lost from the transcript. Reading the Mac's audio directly doesn't do that, and Humla keeps up when you switch speakers or headphones in the middle of a call.",
+      "New installs ask for System audio during setup. If you already gave Humla Screen Recording, nothing changes until you choose to: a card on Home offers the switch, and Settings → Recording → Permissions has it too. On macOS older than 14.2, Humla keeps using Screen Recording. Also in this release: team sync reconnects quietly when the network drops it, instead of stalling for a minute.",
+    ],
+    highlights: [
+      "System audio replaces Screen Recording on macOS 14.2 and later.",
+      "No more screen recording indicator or recurring macOS prompt during meetings.",
+      "The other side of a long call no longer goes silent on macOS 26.",
+      "Team sync reconnects quietly after a network drop.",
+    ],
+    issues: [
+      { title: "Capture system audio with a Core Audio process tap instead of ScreenCaptureKit (macOS 14.2+), so Humla no longer needs Screen Recording", reference: "#220", status: "Closed", url: "https://github.com/michaelwilhelmsen/humla/issues/220" },
+      { title: "Cloud sync: realtime connection is cut every 60 s", reference: "#238", status: "Closed", url: "https://github.com/michaelwilhelmsen/humla/issues/238" },
+    ],
+  },
+  {
+    version: "0.80.0",
+    date: "2026-11-18",
+    title: "Copilot works again",
+    summary: "GitHub Copilot works with the latest Copilot CLI again.",
+    visual: "copilot",
+    paragraphs: [
+      "Copilot CLI 1.0.113 changed how it talks to apps, and Humla couldn't start it any more, so Copilot summaries and chat stopped working for anyone who had updated it. Humla now speaks the new version. If the CLI on your Mac is older or newer than the one Humla supports, Humla downloads the supported one itself (about 140 MB) and carries on, instead of asking you to. Settings → Summary also shows the version Humla actually runs.",
+    ],
+    highlights: [
+      "Copilot works with Copilot CLI 1.0.113 and newer.",
+      "Humla downloads the Copilot CLI it supports when yours won't start.",
+    ],
+    issues: [
+      { title: "It sadly does no longer work with Copilot", reference: "#251", status: "Closed", url: "https://github.com/michaelwilhelmsen/humla/issues/251" },
+    ],
+  },
+  {
+    version: "0.76.1",
+    date: "2026-11-17",
+    title: "Housekeeping and security fixes",
+    summary: "Updated dependencies, a few security fixes and a tidier codebase. Nothing changes in how you use Humla.",
+    paragraphs: [
+      "This release is mostly housekeeping. Humla's dependencies are updated across the board, which clears every known security advisory in them. One of those let pasted HTML run script inside the note editor. Humla's window also had more control over the recording helper than it needed, and that's gone now too.",
+      "A couple of small things you might notice: Settings → About → Open in Finder works again, and the MCP server and webhook settings now link to the setup guides at humla.team/docs. If you use GitHub Copilot, Humla moves to a newer version of the Copilot CLI.",
+      "Under the hood, the biggest file in the app is split into smaller pieces and type-checking runs on the new TypeScript compiler, which is several times faster. You won't see either directly, but they make the next changes quicker and safer to build.",
+    ],
+    highlights: [
+      "Dependencies updated, with every known security advisory cleared.",
+      "Open in Finder in Settings → About works again.",
+      "Setup guides for MCP and webhooks are linked from Settings.",
+      "Newer Copilot CLI.",
+    ],
+    issues: [
+      { title: "Docs: a linkable MCP setup guide for Claude Code / Codex", reference: "#184", status: "Closed", url: "https://github.com/michaelwilhelmsen/humla/issues/184" },
+    ],
+  },
   {
     version: "0.76.0",
     date: "2026-11-15",

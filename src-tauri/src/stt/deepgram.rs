@@ -56,16 +56,9 @@ impl DeepgramAdapter {
 
 #[async_trait]
 impl BatchSttAdapter for DeepgramAdapter {
+    #[cfg(test)]
     fn provider_id(&self) -> &'static str {
         "deepgram"
-    }
-
-    fn label(&self) -> &'static str {
-        "Deepgram"
-    }
-
-    fn supports_language(&self, _lang: &str) -> bool {
-        true
     }
 
     fn supports_word_timestamps(&self, _model: &str) -> bool {
@@ -83,7 +76,7 @@ impl BatchSttAdapter for DeepgramAdapter {
         let base_url = ctx.base_url.unwrap_or(DEEPGRAM_BASE);
         let bytes = tokio::fs::read(audio).await?;
 
-        let client = reqwest::Client::builder()
+        let client = crate::http::client_builder()
             .timeout(std::time::Duration::from_secs(120))
             .build()?;
         let mut req = client
@@ -132,13 +125,13 @@ impl BatchSttAdapter for DeepgramAdapter {
             }
         }
 
-        let r = req.body(bytes).send().await?;
+        let r = req.body(bytes).send().await.map_err(|e| e.without_url())?;
         if !r.status().is_success() {
             let s = r.status();
             let body = r.text().await.unwrap_or_default();
             return Err(anyhow!("Deepgram {s}: {body}"));
         }
-        let body: ListenResponse = r.json().await?;
+        let body: ListenResponse = r.json().await.map_err(|e| e.without_url())?;
         let alt = body
             .results
             .channels
@@ -186,7 +179,6 @@ mod tests {
     fn metadata_is_correct() {
         let a = DeepgramAdapter::new();
         assert_eq!(a.provider_id(), "deepgram");
-        assert_eq!(a.label(), "Deepgram");
         assert!(a.supports_word_timestamps("nova-3"));
     }
 

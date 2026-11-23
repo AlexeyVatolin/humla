@@ -30,16 +30,9 @@ impl LocalWhisperAdapter {
 
 #[async_trait]
 impl BatchSttAdapter for LocalWhisperAdapter {
+    #[cfg(test)]
     fn provider_id(&self) -> &'static str {
         "local"
-    }
-
-    fn label(&self) -> &'static str {
-        "Local Whisper"
-    }
-
-    fn supports_language(&self, lang: &str) -> bool {
-        !crate::local_gigaam::is_model(&self.model_path) || lang == "ru" || lang == "auto"
     }
 
     fn supports_word_timestamps(&self, _model: &str) -> bool {
@@ -85,7 +78,6 @@ mod tests {
             local_whisper::Preset::Quality,
         );
         assert_eq!(a.provider_id(), "local");
-        assert_eq!(a.label(), "Local Whisper");
         assert_eq!(a.supports_word_timestamps("any"), !cfg!(target_os = "windows"));
     }
 }

@@ -1191,12 +1191,6 @@ pub enum ChatTarget {
 }
 
 impl ChatTarget {
-    /// Parse the optional note id an IPC command received. Shorthand for
-    /// [`Self::from_ids`] on the surfaces that can only ever name a note.
-    pub fn from_note_id(note_id: Option<String>) -> Result<Self, String> {
-        Self::from_ids(note_id, None)
-    }
-
     /// Parse the optional ids an IPC command received. The two are ALTERNATIVES,
     /// not composable — a thread is about a note or about a folder — so sending
     /// both is a caller bug rather than something to silently pick between.
@@ -2363,7 +2357,7 @@ fn vec_to_blob(v: &[f32]) -> Vec<u8> {
 /// Decode a stored little-endian f32 blob back to a vector. A blob whose length
 /// isn't a multiple of 4 (corrupt) decodes to what fits, ignoring the tail.
 fn blob_to_vec(b: &[u8]) -> Vec<f32> {
-    b.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect()
+    b.as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect()
 }
 
 /// Distinct (text_hash, text) for a Note's chunks that have no embedding under
@@ -5338,13 +5332,13 @@ mod tests {
     /// a library-wide conversation.
     #[test]
     fn an_absent_note_id_is_global_but_an_empty_one_is_an_error() {
-        assert_eq!(ChatTarget::from_note_id(None).unwrap(), ChatTarget::Global);
+        assert_eq!(ChatTarget::from_ids(None, None).unwrap(), ChatTarget::Global);
         assert_eq!(
-            ChatTarget::from_note_id(Some("n1".into())).unwrap(),
+            ChatTarget::from_ids(Some("n1".into()), None).unwrap(),
             ChatTarget::Note("n1".into())
         );
         for empty in ["", "   ", "\t"] {
-            let err = ChatTarget::from_note_id(Some(empty.into())).unwrap_err();
+            let err = ChatTarget::from_ids(Some(empty.into()), None).unwrap_err();
             assert!(err.contains("empty id"), "got: {err}");
         }
     }

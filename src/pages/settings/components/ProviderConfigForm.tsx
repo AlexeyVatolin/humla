@@ -23,18 +23,17 @@ type LocalModelSummary = {
   downloaded: boolean;
 };
 
-// Model-row description per provider: each picker explains what it selects
-// and how it relates to the provider chosen above (design-review amendment).
+// Model-row description per provider; an empty string shows none.
 const MODEL_DESCRIPTIONS: Record<TranscribeProvider, string> = {
   openai:
-    "whisper-1 is the safe default; gpt-4o-transcribe-diarize labels speakers but treats language as a hint and ignores vocabulary biasing.",
+    "",
   deepgram:
-    "nova-3 is the current best for English and falls back gracefully to other languages.",
-  groq: "Whisper Large v3 Turbo at OpenAI-compatible endpoints — same Whisper quality, ~10× cheaper and faster than OpenAI's hosted version.",
+    "",
+  groq: "",
   local:
-    "Only downloaded models are offered — manage them under Local models below.",
+    "Downloaded models only.",
   custom:
-    "Typed as the endpoint names it, e.g. elevenlabs/scribe-v2 on OpenRouter. Word timings are asked for; a model that refuses them still transcribes, without per-word highlighting.",
+    "Enter exactly as the endpoint names it, e.g. elevenlabs/scribe-v2.",
 };
 
 // Reusable provider+model picker rendered as self-describing rows. Used by
@@ -177,7 +176,6 @@ export function ProviderConfigForm({
         <>
           {!isWindows && <Row
             label="Quality"
-            description="Speed vs accuracy for on-device Whisper — Quality uses beam search and catches more borderline words."
             control={
               <Select
                 value={value.preset}

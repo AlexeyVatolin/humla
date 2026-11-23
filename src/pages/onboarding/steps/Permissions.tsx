@@ -1,14 +1,13 @@
 // Step 2 — Permissions (design/ONBOARDING.md § 2). The microphone gates
-// Continue; system audio and notifications are optional and never block it.
-// Screen Recording has no prompt of its own (request registers the app, then
-// System Settings opens and a focus re-poll picks up the switch), and a grant
-// made during this run only works after a relaunch through `ipc.relaunchApp`,
-// which brings the app back where the Tauri process plugin's would not. The
-// notifications prompt waits for an answer, so asking never holds the rest.
+// Continue; system audio and notifications never block it. System audio is
+// System Audio Recording on macOS 14.2+ and Screen Recording before that, which
+// has no prompt of its own (System Settings opens and a focus re-poll picks up
+// the switch) and only works after a relaunch through `ipc.relaunchApp`.
 import { useEffect, useRef, useState } from "react";
 import { ShieldCheck, Mic, MonitorSpeaker, Bell, RotateCw, ArrowRight } from "lucide-react";
 import { ipc, type PermissionStatus, type PermissionsStatus } from "../../../lib/ipc";
-import { isWindows, permissionReady, systemSettingsName } from "../../../lib/platform";
+import { systemAudioKind, systemAudioReady } from "../../../lib/systemAudio";
+import { isWindows, systemSettingsName } from "../../../lib/platform";
 import type { StepContext } from "../types";
 import { StepShell } from "../StepShell";
 
@@ -56,7 +55,7 @@ function StatusPill({ status }: { status: PermissionStatus }) {
 
 export function PermissionsStep({ ctx }: { ctx: StepContext }) {
   const [status, setStatus] = useState<PermissionsStatus | null>(null);
-  const [busy, setBusy] = useState<"microphone" | "screen" | null>(null);
+  const [busy, setBusy] = useState<"microphone" | "screen" | "systemAudio" | null>(null);
   const [askingNotifications, setAskingNotifications] = useState(false);
 
   // The restart heuristic's memory. `screenGrantedAtMount` is captured from the
@@ -69,6 +68,11 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
   async function refresh() {
     try {
       const s = await ipc.permissionsStatus();
+      // Only Screen Recording needs a relaunch.
+      if (systemAudioKind(s) === "systemAudio") {
+        setStatus(s);
+        return;
+      }
       // Record the mount-time screen state exactly once, on the first read.
       if (screenGrantedAtMount.current === null) {
         screenGrantedAtMount.current = s.screen === "granted";
@@ -135,6 +139,19 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
     }
   }
 
+  async function enableSystemAudio() {
+    if (status && systemAudioKind(status) === "screen") return enableScreen();
+    if (status?.systemAudio === "denied") return openSettings("systemAudio");
+    setBusy("systemAudio");
+    try {
+      setStatus(await ipc.permissionsRequest("systemAudio"));
+    } catch {
+      await refresh();
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function requestNotifications() {
     setAskingNotifications(true);
     try {
@@ -146,7 +163,7 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
     }
   }
 
-  async function openSettings(kind: "microphone" | "notifications") {
+  async function openSettings(kind: "microphone" | "systemAudio" | "notifications") {
     try {
       await ipc.permissionsOpenSettings(kind);
     } catch (e) {
@@ -168,7 +185,7 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
       <StepShell
         icon={<ShieldCheck size={26} strokeWidth={1.6} />}
         title="Grant recording permissions"
-        subtitle="Humla needs microphone access to record. System audio is optional."
+        subtitle="System audio is only needed for remote calls."
       />
     );
   }
@@ -176,7 +193,9 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
   const micGranted = status.microphone === "granted";
   const micBlocked =
     status.microphone === "denied" || status.microphone === "restricted";
-  const screenGranted = permissionReady(status.screen);
+  const audioKind = systemAudioKind(status);
+  const audioStatus = status[audioKind];
+  const audioReady = systemAudioReady(status);
 
   return (
     <StepShell
@@ -201,7 +220,7 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
                 <StatusPill status={status.microphone} />
               </div>
               <p className="mt-1.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                Required — captures your voice. Humla can't record without it.
+                Required.
               </p>
               {micBlocked && (
                 <p className="mt-1.5 text-xs leading-relaxed text-[var(--color-danger)]">
@@ -246,21 +265,27 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
                 <span className="text-sm font-semibold text-[var(--color-text)]">
                   System audio
                 </span>
-                <StatusPill status={status.screen} />
+                <StatusPill status={audioStatus} />
               </div>
               <p className="mt-1.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                {isWindows ? "Humla captures the other side of your calls through Windows audio. No screen recording permission is needed." : 'macOS bundles system-audio capture under "Screen Recording." Humla uses it to hear the other side of your calls — it never captures your screen.'}
+                {isWindows ? "Humla captures the other side of your calls through Windows audio. No screen recording permission is needed." : audioKind === "systemAudio" ? "Optional. For the other side of your calls." : 'macOS bundles system-audio capture under "Screen Recording." Humla uses it to hear the other side of your calls — it never captures your screen.'}
               </p>
             </div>
             <div className="shrink-0">
-              {!screenGranted && (
+              {!audioReady && (
                 <button
                   type="button"
-                  onClick={enableScreen}
+                  onClick={enableSystemAudio}
                   disabled={busy !== null}
                   className="nd-btn"
                 >
-                  {busy === "screen" ? "Opening…" : "Enable system audio"}
+                  {busy === "screen"
+                    ? "Opening…"
+                    : busy === "systemAudio"
+                      ? "Waiting for macOS…"
+                      : audioStatus === "denied" && audioKind === "systemAudio"
+                        ? "Open System Settings"
+                        : "Enable system audio"}
                 </button>
               )}
             </div>
@@ -310,8 +335,7 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
                 <StatusPill status={status.notifications} />
               </div>
               <p className="mt-1.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                Optional — lets Humla tell you when a recording started from the
-                menu bar or a link begins, is saved, or can't start.
+                Optional. For recordings started from the menu bar or a link.
               </p>
             </div>
             <div className="shrink-0">
@@ -375,7 +399,7 @@ export function PermissionsStep({ ctx }: { ctx: StepContext }) {
         )}
 
         {/* System-audio skip — carries its consequence. Advances; never blocks. */}
-        {micGranted && !screenGranted && (
+        {micGranted && !audioReady && (
           <button
             type="button"
             onClick={ctx.goNext}

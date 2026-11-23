@@ -1,15 +1,26 @@
 //! Notifications Humla posts through macOS's UserNotifications: whether it
 //! may, posting one with buttons, taking one back, and what the user clicked.
 
+// Off macOS there is no UserNotifications, so its click and permission paths
+// have no caller there.
+#![cfg_attr(not(target_os = "macos"), allow(dead_code))]
+
+#[cfg(target_os = "macos")]
+mod center;
+#[cfg(not(target_os = "macos"))]
+#[path = "center_other.rs"]
 mod center;
 mod permission;
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+#[cfg(target_os = "macos")]
 use objc2_user_notifications::UNNotificationDefaultActionIdentifier;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
+#[cfg(target_os = "macos")]
+use tauri::Emitter;
 use tauri_plugin_notification::NotificationExt;
 
 use center::Center;
@@ -30,6 +41,7 @@ pub(crate) struct Response {
     pub action: Option<String>,
 }
 
+#[cfg(target_os = "macos")]
 impl Response {
     /// The response to a click on notification `id`, from the identifier macOS
     /// reports for what was clicked.
@@ -172,6 +184,7 @@ async fn registered_category(center: Center, actions: &[Action]) -> Option<Strin
 }
 
 /// Reports a click on notification `id` to the app.
+#[cfg(target_os = "macos")]
 fn clicked(app: &AppHandle, id: &str, action_identifier: &str) {
     let response = Response::from_click(id, action_identifier);
     eprintln!("[notifications] clicked {} (action {:?})", response.id, response.action);
@@ -272,6 +285,7 @@ fn route(bundled: bool, authorization: Authorization) -> Route {
 mod tests {
     use super::*;
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn a_click_on_the_notification_itself_carries_no_action() {
         // SAFETY: a constant string UserNotifications exports.
@@ -279,6 +293,7 @@ mod tests {
         assert_eq!(Response::from_click("n-1", &body), Response { id: "n-1".into(), action: None });
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn a_button_click_carries_the_buttons_id() {
         assert_eq!(

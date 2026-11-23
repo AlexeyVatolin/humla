@@ -1,7 +1,7 @@
 //! AI chat over a single Note (issue #46). This module owns the provider seam
 //! (`ChatAdapter`), the typed message parts, the grounded-prompt assembly with
 //! its context budget, and the `run_chat` orchestration that ties persistence
-//! + streaming together. The `#[tauri::command]` wrappers live in
+//! and streaming together. The `#[tauri::command]` wrappers live in
 //! `commands::chat`; everything here is Tauri-free so it's unit-testable.
 
 pub(crate) mod adapter;
@@ -77,7 +77,7 @@ pub mod test_server {
 }
 pub use tools::{client_pin_applies, execute_tool, tool_specs, Citation, Pins, ToolScope};
 #[cfg(test)]
-pub use providers::{FakeChatAdapter, StallingChatAdapter};
+pub use providers::StallingChatAdapter;
 
 use anyhow::Result;
 use parking_lot::Mutex;
@@ -1963,7 +1963,7 @@ mod tests {
         assert_eq!(max_steps_for(&ToolScope::Note("n".into())), MAX_STEPS_NOTE);
         assert_eq!(max_steps_for(&ToolScope::Folder("f".into())), MAX_STEPS_BROAD);
         assert_eq!(max_steps_for(&ToolScope::All), MAX_STEPS_BROAD);
-        assert!(MAX_STEPS_BROAD > MAX_STEPS_NOTE);
+        const { assert!(MAX_STEPS_BROAD > MAX_STEPS_NOTE) };
 
         let dir = tempfile::tempdir().unwrap();
         let (dbh, _path) = temp_db(&dir);

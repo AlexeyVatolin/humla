@@ -50,7 +50,7 @@ export function LocalModelManager({
               // where the user is already looking, instead of letting
               // Record fail.
               isActive && !m.downloaded
-                ? "Selected as the default but not downloaded — recording won't start until you download it."
+                ? "Not downloaded. Recording won't start until it is."
                 : undefined
             }
           />

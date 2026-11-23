@@ -59,7 +59,7 @@ export function mockTauri(
       case "chat_get_pin":
         return "";
       case "permissions_status":
-        return { microphone: "granted", screen: "granted", notifications: "granted" };
+        return { microphone: "granted", screen: "granted", systemAudio: "granted", notifications: "granted" };
       case "cloud_status":
         return {
           configured: false,
@@ -80,7 +80,7 @@ export function mockTauri(
       case "copilot_models":
         return [];
       case "copilot_status":
-        return { login: null, cliPath: null, cliVersion: null, cliError: null, downloadVersion: "0.0.0-test" };
+        return { login: null, cliPath: null, cliVersion: null, cliError: null, cliIsDownload: false, downloadVersion: "0.0.0-test" };
       case "copilot_sign_in_start":
         return { userCode: "ABCD-1234", verificationUri: "https://github.com/login/device", expiresIn: 900 };
       // No embedding server in a test environment — the honest default is the

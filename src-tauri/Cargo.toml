@@ -1,6 +1,6 @@
 [package]
 name = "humla"
-version = "0.76.0"
+version = "0.81.0"
 description = "Humla — personal meeting notes that hum along"
 authors = ["Michael Wilhelmsen"]
 edition = "2021"
@@ -32,8 +32,9 @@ tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
-rusqlite = { version = "0.32", features = ["bundled"] }
-reqwest = { version = "0.12", features = ["json", "multipart", "rustls-tls", "stream"], default-features = false }
+rusqlite = { version = "0.43", features = ["bundled"] }
+reqwest = { version = "0.13", features = ["json", "multipart", "query", "form", "rustls-no-provider", "stream"], default-features = false }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 futures-util = "0.3"
 # Local LLM inference is delegated to whichever OpenAI-compatible HTTP server
 # the user runs (Ollama, LM Studio, llama-server, vLLM, …). We reuse the
@@ -41,13 +42,11 @@ futures-util = "0.3"
 # duplicate-GGML conflict with whisper-rs.
 uuid = { version = "1", features = ["v4", "v5"] }
 anyhow = "1"
-thiserror = "2"
 async-trait = "0.1"
 chrono = "0.4"
 parking_lot = "0.12"
-dirs = "5"
+dirs = "7"
 libc = "0.2"
-tauri-plugin-process = "2"
 # Native save panel for the note-export flow (issue #18). Frontend picks the
 # target path via the JS `save()` dialog; `export_note` writes to it.
 tauri-plugin-dialog = "2"
@@ -76,14 +75,14 @@ krilla = { version = "0.8", default-features = false, features = ["simple-text"]
 rustybuzz = "0.20"
 # GitHub Copilot: drives the user's Copilot CLI over JSON-RPC. Without
 # `bundled-cli`, so copilot::cli finds or downloads the CLI at run time.
-github-copilot-sdk = { version = "=1.0.27", default-features = false, features = ["runtime"] }
+copilot-sdk = { version = "=2.0.1", default-features = false, features = ["runtime"] }
 # The Copilot CLI download: an npm tarball, checked against a pinned sha512.
 tar = "0.4"
 flate2 = "1"
-sha2 = "0.10"
-base64 = "0.22"
+sha2 = "0.11"
+base64 = "0.23"
 # `humla://` links. Same minor as `@tauri-apps/plugin-deep-link` in package.json.
-tauri-plugin-deep-link = "~2.4"
+tauri-plugin-deep-link = "~2.6"
 
 [dev-dependencies]
 tempfile = "3"

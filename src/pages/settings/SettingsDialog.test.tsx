@@ -185,15 +185,15 @@ describe("settings dialog", () => {
       name: /keep recorded audio/i,
     });
 
-    expect(within(dialog).getByText(/no audio is stored on this device/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/transcript only/i)).toBeInTheDocument();
 
     await userEvent.click(toggle);
 
     expect(
-      within(dialog).getByText(/keep recordings for playback and speaker re-detection/i),
+      within(dialog).getByText(/for playback and speaker re-detection/i),
     ).toBeInTheDocument();
     expect(
-      within(dialog).queryByText(/no audio is stored on this device/i),
+      within(dialog).queryByText(/transcript only/i),
     ).not.toBeInTheDocument();
   });
 
@@ -324,14 +324,14 @@ describe("settings dialog", () => {
   });
 
   it("Escape in a nested modal closes only that modal, not the dialog", async () => {
-    renderApp("/settings?tab=summaries");
+    renderApp("/settings?tab=templates");
     const dialog = await screen.findByRole("dialog", { name: /settings/i });
 
-    // The summary-prompt editor is a Modal nested inside the dialog.
+    // The template editor is a Modal nested inside the dialog.
     await userEvent.click(
-      await within(dialog).findByRole("button", { name: /new prompt/i }),
+      await within(dialog).findByRole("button", { name: /new template/i }),
     );
-    const editor = await screen.findByRole("dialog", { name: /new prompt/i });
+    const editor = await screen.findByRole("dialog", { name: /new template/i });
     expect(editor).toBeInTheDocument();
 
     await userEvent.keyboard("{Escape}");
@@ -339,7 +339,7 @@ describe("settings dialog", () => {
     // Editor dismissed; the settings dialog (and any typed work behind it)
     // survives.
     expect(
-      screen.queryByRole("dialog", { name: /new prompt/i }),
+      screen.queryByRole("dialog", { name: /new template/i }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("dialog", { name: /settings/i }),
@@ -409,12 +409,28 @@ describe("settings dialog", () => {
       .getAllByRole("tab")
       .map((t) => t.textContent);
     expect(tabs).toEqual([
+      "Templates",
+      "Vocabulary",
       "Recording",
       "Transcription",
       "Summaries",
       "Chat",
       "General",
     ]);
+    // Captions are text, not something to click.
+    expect(within(dialog).queryByRole("button", { name: "Content" })).toBeNull();
+    expect(within(dialog).queryByRole("tab", { name: "Setup" })).toBeNull();
+  });
+
+  it("gives every sidebar section a decorative icon", async () => {
+    renderApp("/settings");
+    const dialog = await screen.findByRole("dialog", { name: /settings/i });
+
+    for (const tab of within(dialog).getAllByRole("tab")) {
+      const icon = tab.querySelector("svg");
+      expect(icon).not.toBeNull();
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+    }
   });
 
   it("moves focus into the dialog on open and back to the trigger on close", async () => {
@@ -464,6 +480,35 @@ describe("settings dialog", () => {
     expect(
       within(dialog).getByLabelText(/groq api key/i),
     ).toBeInTheDocument();
+  });
+
+  it("sends links aimed at the prompts or vocabulary to their new sections", async () => {
+    renderApp("/settings?tab=prompts");
+    const dialog = await screen.findByRole("dialog", { name: /settings/i });
+    expect(within(dialog).getByRole("tab", { name: "Templates" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("the summaries link opens Templates", async () => {
+    renderApp("/settings?tab=summaries");
+    const dialog = await screen.findByRole("dialog", { name: /settings/i });
+    await userEvent.click(await within(dialog).findByRole("button", { name: "Edit templates" }));
+    expect(within(dialog).getByRole("tab", { name: "Templates" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("vocabulary lives in its own section, not Transcription", async () => {
+    renderApp("/settings?tab=transcription");
+    const dialog = await screen.findByRole("dialog", { name: /settings/i });
+    await within(dialog).findByRole("tab", { name: "Transcription" });
+    expect(within(within(dialog).getByRole("tabpanel")).queryByText(/vocabulary|custom terms/i)).toBeNull();
+
+    await userEvent.click(within(dialog).getByRole("tab", { name: "Vocabulary" }));
+    expect(await within(dialog).findByLabelText("Add a term")).toBeInTheDocument();
   });
 
   it("the default language lives in Transcription and persists", async () => {
@@ -658,7 +703,7 @@ describe("settings dialog", () => {
         "Use Nemotron 3 (end-to-end) for new recordings",
         "Use Community-1 (clustering) for new recordings",
       ]);
-      expect(within(dialog).getByText(/up to 8 speakers, counts them itself/i)).toBeInTheDocument();
+      expect(within(dialog).getByText(/limit: 8 speakers/i)).toBeInTheDocument();
       expect(within(dialog).getByText(/193 MB/)).toBeInTheDocument();
     });
 
@@ -705,10 +750,12 @@ describe("settings dialog", () => {
     expect(
       await within(dialog).findByLabelText(/openai api key/i),
     ).toBeInTheDocument();
-    // Default preset moved here from General.
+    // Default template moved here from General.
     expect(
       within(dialog).getByRole("combobox", { name: /meeting/i }),
     ).toBeInTheDocument();
+    // The templates themselves live in Content → Templates.
+    expect(within(dialog).queryByRole("button", { name: /new template/i })).toBeNull();
 
     await userEvent.click(within(dialog).getByRole("tab", { name: "General" }));
     expect(
@@ -757,12 +804,12 @@ describe("settings dialog", () => {
   it("switches sections from the nav and reflects it in the URL", async () => {
     renderApp("/settings");
     const dialog = await screen.findByRole("dialog", { name: /settings/i });
-    // Default landing is the first section, Recording.
+    // Default landing is the first section, Templates.
     expect(
-      within(dialog).getByRole("tab", { name: "Recording" }),
+      within(dialog).getByRole("tab", { name: "Templates" }),
     ).toHaveAttribute("aria-selected", "true");
     expect(
-      await within(dialog).findByRole("heading", { name: /audio retention/i }),
+      await within(dialog).findByRole("heading", { name: "Built-in" }),
     ).toBeInTheDocument();
 
     await userEvent.click(within(dialog).getByRole("tab", { name: "General" }));

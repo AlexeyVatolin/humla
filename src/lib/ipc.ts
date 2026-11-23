@@ -10,6 +10,8 @@ export type CopilotStatus = {
   cliVersion: string | null;
   /** Why the CLI last failed to start, if it did. */
   cliError: string | null;
+  /** Whether the CLI found is Humla's own download of `downloadVersion`. */
+  cliIsDownload: boolean;
   downloadVersion: string;
 };
 export type CopilotDeviceCode = { userCode: string; verificationUri: string; expiresIn: number };
@@ -161,6 +163,9 @@ export type SettingsKey =
   // The offer to switch to Nemotron 3 that an upgraded install gets: "pending"
   // (written by the upgrade migration), "accepted" or "declined".
   | "nemotron_offer"
+  // "declined" once the Home card offering System Audio Recording to a Screen
+  // Recording user was turned down.
+  | "system_audio_offer"
   | "keep_audio"
   // Skip transcription while recording and run it later from the note's
   // Transcribe action (#146). Only ever in force while `keep_audio` is on —
@@ -267,6 +272,8 @@ export type SummaryPrompt = {
   // or display "edited X ago" later if useful.
   created_at: number;
   updated_at: number;
+  /** The workspace it is shared in; empty for a personal template. */
+  workspace_id?: string;
 };
 
 export type LocalWhisperModelStatus = {
@@ -800,7 +807,7 @@ export const ipc = {
   permissionsOpenSettings: (kind: PermissionKind) => invoke<void>("permissions_open_settings", { kind }),
 };
 
-export type PermissionKind = "microphone" | "screen" | "notifications";
+export type PermissionKind = "microphone" | "screen" | "systemAudio" | "notifications";
 export type PermissionStatus =
   | "granted"
   | "not_required"
@@ -811,6 +818,7 @@ export type PermissionStatus =
 export type PermissionsStatus = {
   microphone: PermissionStatus;
   screen: PermissionStatus;
+  systemAudio: PermissionStatus;
   notifications: PermissionStatus;
 };
 

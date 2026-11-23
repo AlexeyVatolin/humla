@@ -50,6 +50,9 @@ import { TranscriptionTab } from "./pages/settings/tabs/Transcription";
 import { DEFAULTS, EMPTY_DIARIZE_STATE, type EditableKey } from "./pages/settings/types";
 import { useSettings } from "./pages/settings/useSettings";
 import { makeNote } from "./test/fixtures";
+import { PermissionsStep } from "./pages/onboarding/steps/Permissions";
+import { Permissions } from "./components/Permissions";
+import { Section } from "./pages/settings/components/Section";
 import { DEMO_CLIENTS, DEMO_FOLDERS, demoNotes } from "./test/noteLibrary";
 import { mockTauri } from "./test/tauri";
 import { DEMO_RECOVERY_CODES, DEMO_TWO_FACTOR_SETUP } from "./test/twoFactorFixtures";
@@ -285,7 +288,7 @@ function panelEmptyCase(pending: boolean, width = 320): Scenario {
         text={
           pending
             ? "This recording hasn't been transcribed yet."
-            : "No transcript yet. Start a recording from the toolbar to capture and transcribe audio."
+            : "No transcript yet."
         }
         action={
           pending ? (
@@ -524,12 +527,13 @@ function copilotCase(state: "no-cli" | "broken-cli" | "signed-out" | "signed-in"
       copilot_status: () => ({
         login: state === "signed-in" || state === "broken-cli" ? "octocat" : null,
         cliPath: state === "no-cli" ? null : "/Users/u/.hermes/node/lib/node_modules/@github/copilot/node_modules/@github/copilot-darwin-arm64/copilot",
-        cliVersion: state === "no-cli" ? null : state === "broken-cli" ? "0.9.0" : "1.0.104",
+        cliVersion: state === "no-cli" ? null : state === "broken-cli" ? "0.9.0" : "1.0.114",
         cliError:
           state === "broken-cli"
-            ? "Couldn't start the Copilot CLI: protocol version 2 is not in the supported range 3..=3"
+            ? "Couldn't start the Copilot CLI: version mismatch: server=3, supported=4–4"
             : null,
-        downloadVersion: "1.0.104",
+        cliIsDownload: false,
+        downloadVersion: "1.0.114",
       }),
       copilot_sign_in_start: () => ({
         userCode: "8C17-B75D",
@@ -756,7 +760,7 @@ function menubarCase(closeToTray: boolean, hotkey: string): Scenario {
       record_hotkey_set: () => null,
       launch_at_login_get: () => closeToTray,
       launch_at_login_set: () => null,
-      permissions_status: () => ({ microphone: "granted", screen: "granted", notifications: "granted" }),
+      permissions_status: () => ({ microphone: "granted", screen: "granted", systemAudio: "granted", notifications: "granted" }),
       stored_audio_stats: () => ({ notes: 0, files: 0, bytes: 0, noteIds: [] }),
     },
   };
@@ -780,7 +784,7 @@ function retentionCase(keepAudio: boolean, manual: boolean): Scenario {
     ipc: {
       record_hotkey_get: () => "Command+Control+KeyR",
       record_hotkey_set: () => null,
-      permissions_status: () => ({ microphone: "granted", screen: "granted", notifications: "granted" }),
+      permissions_status: () => ({ microphone: "granted", screen: "granted", systemAudio: "granted", notifications: "granted" }),
       stored_audio_stats: () => ({ notes: 0, files: 0, bytes: 0, noteIds: [] }),
     },
   };
@@ -904,6 +908,36 @@ function nemotronOfferCase(offer?: NemotronOfferState): Scenario {
     },
     seed: offer ? () => useNemotronOffer.setState({ offer }) : undefined,
   };
+}
+
+// ---- system audio through its own permission -------------------------------
+// Onboarding, Settings and Home's card, each in the state that decides its copy:
+// never asked, turned down, and macOS before 14.2 (Screen Recording).
+function systemAudioPermissions(systemAudio: string, screen: string) {
+  return { microphone: "granted", screen, systemAudio, notifications: "granted" };
+}
+
+function systemAudioCase(where: "onboarding" | "settings" | "home", systemAudio: string, screen = "denied"): Scenario {
+  const permissions_status = () => systemAudioPermissions(systemAudio, screen);
+  if (where === "home") {
+    return {
+      route: "/",
+      render: () => null,
+      ipc: { notes_list: () => demoNotes(), folders_list: () => DEMO_FOLDERS, permissions_status },
+    };
+  }
+  if (where === "settings") {
+    return {
+      wrap: settingsWrap,
+      render: () => (
+        <Section title="Permissions">
+          <Permissions />
+        </Section>
+      ),
+      ipc: { permissions_status },
+    };
+  }
+  return { step: "permissions", render: (ctx) => <PermissionsStep ctx={ctx} />, ipc: { permissions_status } };
 }
 
 // ---- workspace-creation axis: the sheet's five stages ----------------------
@@ -1394,6 +1428,12 @@ const CASES: Record<string, Scenario> = {
     "Failed to build the model execution plan using a model architecture file",
   ),
   "engines-warming": diarizeWarmingCase(),
+  "system-audio-onboarding": systemAudioCase("onboarding", "not_determined"),
+  "system-audio-onboarding-denied": systemAudioCase("onboarding", "denied"),
+  "system-audio-onboarding-old-macos": systemAudioCase("onboarding", "unsupported"),
+  "system-audio-settings": systemAudioCase("settings", "not_determined"),
+  "system-audio-settings-denied": systemAudioCase("settings", "denied"),
+  "system-audio-offer": systemAudioCase("home", "not_determined", "granted"),
   "offer-home": nemotronOfferCase(),
   "offer-downloading": nemotronOfferCase({ stage: "downloading", fraction: 0.42, phase: "downloading" }),
   "offer-warming": nemotronOfferCase({ stage: "downloading", fraction: 0, phase: "warming" }),
@@ -1865,6 +1905,27 @@ const CASES: Record<string, Scenario> = {
     },
   },
 
+  // --- The whole Settings dialog over the app, on the unit tests' defaults plus
+  // a few templates and terms. `&section=<id>` opens on a section; `?tab=` is
+  // not read from the page URL. `settings-workspace` is the same inside a team
+  // workspace, where shared templates get their own group;
+  // `settings-workspace-viewer` is that as a viewer, who can't edit them.
+  settings: {
+    route: `/settings?tab=${new URLSearchParams(location.search).get("section") ?? "templates"}`,
+    render: () => null, // unused — `route` renders the app
+    ipc: settingsContentIpc(null),
+  },
+  "settings-workspace": {
+    route: `/settings?tab=${new URLSearchParams(location.search).get("section") ?? "templates"}`,
+    render: () => null, // unused — `route` renders the app
+    ipc: settingsContentIpc("member"),
+  },
+  "settings-workspace-viewer": {
+    route: `/settings?tab=${new URLSearchParams(location.search).get("section") ?? "templates"}`,
+    render: () => null, // unused — `route` renders the app
+    ipc: settingsContentIpc("viewer"),
+  },
+
   // --- Two-factor authentication. Settings → Account, signed in to a
   // workspace you administer. `-off` also has a workspace waiting for it, so the
   // switcher's locked row and the section's notice show; click "Turn on…" for
@@ -1905,6 +1966,49 @@ const CASES: Record<string, Scenario> = {
     ipc: {},
   },
 };
+
+function settingsContentIpc(
+  workspace: CloudWorkspace["role"] | null,
+): Record<string, (args: unknown) => unknown> {
+  const team: CloudWorkspace = { id: "w1", name: "Acme", role: workspace ?? "member", plan_status: "active" };
+  const row = (id: string, name: string, content: string, workspace_id = "") => ({
+    id,
+    name,
+    content,
+    created_at: 0,
+    updated_at: 0,
+    workspace_id,
+  });
+  const templates = [
+    row("t1", "Team standup", "List what each person did, what they will do next, and anything blocking them."),
+    ...(workspace
+      ? [
+          row("t2", "Customer call", "Record the customer's questions, what we promised, and follow-ups.", "w1"),
+          row("t3", "Retro", "What went well, what didn't, and what we change next sprint.", "w1"),
+        ]
+      : []),
+  ];
+  return {
+    summary_prompts_list: () => templates,
+    settings_get: (args) =>
+      (args as { key: string }).key === "custom_vocabulary"
+        ? "Humla, Hege Nilsen, ScreenCaptureKit, Tauri, Nemotron"
+        : null,
+    ...(workspace
+      ? {
+          cloud_status: () => ({
+            ...DISCONNECTED,
+            configured: true,
+            logged_in: true,
+            base_url: "https://sync.humla.team",
+            user: { id: "u1", email: "m@example.no", name: "Michael", verified: true },
+            current_workspace: team,
+            workspaces: [team],
+          }),
+        }
+      : {}),
+  };
+}
 
 function twoFactorIpc(enabled: boolean) {
   const acme: CloudWorkspace = {

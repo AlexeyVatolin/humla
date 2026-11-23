@@ -14,8 +14,12 @@ use anyhow::{anyhow, bail, Context};
 use base64::Engine as _;
 use sha2::{Digest, Sha512};
 
-/// The CLI `github-copilot-sdk` 1.0.27 was published against.
-pub const VERSION: &str = "1.0.104";
+/// The CLI `copilot-sdk` 2.0.1 was published against.
+pub const VERSION: &str = "1.0.114";
+
+/// The oldest CLI that speaks the SDK's protocol (4); an older download is
+/// refused at start, so it is never tried.
+const OLDEST_COMPATIBLE: &str = "1.0.114";
 
 /// GitHub's Apple team, which signs the CLI binary.
 const GITHUB_TEAM_ID: &str = "VEKTX9H2N7";
@@ -28,11 +32,11 @@ fn pinned(arch: &str) -> Option<(&'static str, &'static str)> {
     match arch {
         "aarch64" => Some((
             "copilot-darwin-arm64",
-            "sha512-CpnR+JyacZZyMf/jeKLCewQJNT1aHcCxwCSYKqM87Zn62YMB0fJJ7vqvvIzVYvoqHb72i9BszpO/iCuKSoma5g==",
+            "sha512-Mw47DTwMNDG0bb4t1rVu7S+ekdThIGGitpG28/wGpACZ0lFhYnpNEoSJ7hHBM3oix4b/w6+ZcmxE9J9MngsR9Q==",
         )),
         "x86_64" => Some((
             "copilot-darwin-x64",
-            "sha512-pwI5YaVhC2ESsI9lZR+jLaXeb4zlCguWaU8fXZU+/+nD8JkW7mzoGF1xTPvD/JNRrDMpIc8YW38cUv2RpbehgA==",
+            "sha512-yEvWQ5XY10b8KbateMDggbHwj/Ocd5VjkmJX4xDB1YwlMFVin9812X8YsWTaG09RmOKTMU9dwAjWHHSUDUEK6Q==",
         )),
         _ => None,
     }
@@ -49,6 +53,39 @@ fn npm_arch(arch: &str) -> &str {
 /// Where Humla keeps a CLI it downloaded.
 pub fn managed_path(app_data: &Path) -> PathBuf {
     app_data.join("copilot").join(VERSION).join(if cfg!(windows) { "copilot.exe" } else { "copilot" })
+}
+
+/// Humla's downloads: the pinned version first, then older ones still on the
+/// SDK's protocol, newest first.
+pub fn managed_paths(app_data: &Path) -> Vec<PathBuf> {
+    let mut older: Vec<(Vec<u64>, PathBuf)> = std::fs::read_dir(app_data.join("copilot"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().into_string().ok()?;
+            let key = version_key(&name)?;
+            let compatible = key >= version_key(OLDEST_COMPATIBLE)?;
+            (name != VERSION && compatible).then(|| (key, entry.path().join("copilot")))
+        })
+        .collect();
+    older.sort_by(|a, b| b.0.cmp(&a.0));
+    std::iter::once(managed_path(app_data)).chain(older.into_iter().map(|(_, p)| p)).collect()
+}
+
+fn version_key(name: &str) -> Option<Vec<u64>> {
+    name.split('.').map(|part| part.parse().ok()).collect()
+}
+
+/// Delete Humla's downloads of every version but the pinned one.
+fn remove_other_downloads(app_data: &Path) {
+    let Ok(entries) = std::fs::read_dir(app_data.join("copilot")) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if name != VERSION && name.to_str().and_then(version_key).is_some() {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
 }
 
 /// What the user's login shell knows: its PATH, and npm's global prefix, whose
@@ -78,12 +115,12 @@ impl LoginShell {
 }
 
 /// Every place the CLI may be, in the order they are tried: an explicit
-/// `COPILOT_CLI_PATH`, Humla's own download, the usual install roots, then the
+/// `COPILOT_CLI_PATH`, Humla's own downloads, the usual install roots, then the
 /// login shell's PATH and npm prefix. A download comes before the user's own
 /// install because its version is the one the SDK speaks.
 pub fn candidates(
     env_override: Option<&Path>,
-    managed: &Path,
+    managed: &[PathBuf],
     home: &Path,
     shell: Option<&LoginShell>,
 ) -> Vec<PathBuf> {
@@ -96,7 +133,9 @@ pub fn candidates(
     if let Some(p) = env_override {
         push(p.to_path_buf());
     }
-    push(managed.to_path_buf());
+    for p in managed {
+        push(p.clone());
+    }
     #[cfg(target_os = "windows")]
     if let Some(search) = std::env::var_os("PATH") {
         for directory in std::env::split_paths(&search) {
@@ -223,7 +262,7 @@ pub async fn login_shell() -> Option<LoginShell> {
 /// Look for the CLI everywhere, the login shell last since it costs a process.
 pub async fn locate(app_data: &Path) -> Option<PathBuf> {
     let env_override = std::env::var_os("COPILOT_CLI_PATH").map(PathBuf::from);
-    let managed = managed_path(app_data);
+    let managed = managed_paths(app_data);
     let home = dirs::home_dir()?;
     let quick = candidates(env_override.as_deref(), &managed, &home, None);
     if let Some(found) = find(&quick, arch()) {
@@ -233,13 +272,14 @@ pub async fn locate(app_data: &Path) -> Option<PathBuf> {
     find(&candidates(None, &managed, &home, Some(&shell)), arch())
 }
 
-/// `copilot --version`'s version number.
+/// The version Humla runs. Without `--no-auto-update` the CLI reports the
+/// newer copy it would update itself to.
 pub async fn version(binary: &Path) -> Option<String> {
     let mut command = tokio::process::Command::new(binary);
     #[cfg(target_os = "windows")]
     command.creation_flags(0x08000000);
     let run = command
-        .arg("--version")
+        .args(["--no-auto-update", "--version"])
         .stdin(std::process::Stdio::null())
         .kill_on_drop(true)
         .output();
@@ -259,7 +299,7 @@ pub async fn download(
     let (package, integrity) =
         pinned(arch()).ok_or_else(|| anyhow!("Copilot isn't available for this device"))?;
     let url = format!("https://registry.npmjs.org/@github/{package}/-/{package}-{VERSION}.tgz");
-    let r = reqwest::Client::new()
+    let r = crate::http::client()
         .get(&url)
         .header("User-Agent", super::auth::user_agent())
         .send()
@@ -287,6 +327,7 @@ pub async fn download(
     #[cfg(target_os = "macos")]
     verify_signature(&unverified).await?;
     std::fs::rename(&unverified, &dest)?;
+    remove_other_downloads(app_data);
     Ok(dest)
 }
 
@@ -319,12 +360,47 @@ mod tests {
     }
 
     #[test]
+    fn older_downloads_on_the_protocol_follow_the_pinned_one_newest_first() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["1.0.112", "1.0.115", "1.0.120", "notes", VERSION] {
+            std::fs::create_dir_all(dir.path().join("copilot").join(name)).unwrap();
+        }
+        let root = dir.path().join("copilot");
+        assert_eq!(
+            managed_paths(dir.path()),
+            [
+                root.join(VERSION).join("copilot"),
+                root.join("1.0.120/copilot"),
+                root.join("1.0.115/copilot"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_download_leaves_only_the_pinned_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("copilot");
+        write(&root.join("1.0.104/copilot"), MACH_O);
+        write(&root.join(VERSION).join("copilot"), MACH_O);
+        std::fs::create_dir_all(root.join("notes")).unwrap();
+
+        remove_other_downloads(dir.path());
+
+        assert!(!root.join("1.0.104").exists());
+        assert!(root.join(VERSION).join("copilot").is_file());
+        assert!(root.join("notes").is_dir());
+    }
+
+    #[test]
     fn candidates_run_from_explicit_to_the_login_shell() {
         let home = Path::new("/Users/u");
-        let managed = Path::new("/data/copilot/1.0.104/copilot");
+        let managed = [
+            PathBuf::from("/data/copilot/1.0.112/copilot"),
+            PathBuf::from("/data/copilot/1.0.104/copilot"),
+        ];
         let got = candidates(
             Some(Path::new("/custom/copilot")),
-            managed,
+            &managed,
             home,
             Some(&LoginShell {
                 path: "/Users/u/.nvm/versions/node/v22/bin:/usr/local/bin:relative/bin".into(),
@@ -335,6 +411,7 @@ mod tests {
             got,
             [
                 "/custom/copilot",
+                "/data/copilot/1.0.112/copilot",
                 "/data/copilot/1.0.104/copilot",
                 "/opt/homebrew/bin/copilot",
                 "/usr/local/bin/copilot",

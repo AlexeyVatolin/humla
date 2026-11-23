@@ -13,8 +13,8 @@
 //! (`schema_version`), so it is built from an explicit list of fields, kept as
 //! small as is useful, and never serializes a whole `Note`. Fields may be
 //! added; existing ones keep their meaning. It carries no audio and no path to
-//! any: `keep_audio` stays the only gate on audio (#24). `docs/webhooks.md`
-//! documents it for receivers.
+//! any: `keep_audio` stays the only gate on audio (#24). humla.team/docs
+//! (`integrations/webhooks`) documents it for receivers.
 use super::{err, summary::note_language};
 use crate::{db, html_text::html_to_text, keychain, sessions, AppState};
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -349,7 +349,7 @@ async fn deliver(endpoint: &Endpoint, payload: &Value) -> Result<(), String> {
     let body = serde_json::to_vec(payload)
         .map_err(|_| "Could not encode the webhook JSON.".to_string())?;
     let payload_bytes = body.len();
-    let client = reqwest::Client::builder()
+    let client = crate::http::client_builder()
         .user_agent(concat!("Humla/", env!("CARGO_PKG_VERSION")))
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(10))
@@ -575,7 +575,7 @@ mod tests {
                 "transcript",
                 "updated_at",
             ],
-            "a new field is a change to the documented contract (docs/webhooks.md)"
+            "a new field is a change to the documented contract (humla.team/docs/integrations/webhooks)"
         );
         assert_eq!(body["id"], note.id);
         assert_eq!(body["created_at"], "2026-10-12T09:00:00.000Z");

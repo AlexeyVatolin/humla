@@ -12,6 +12,7 @@
 // only — they never gate recording (the spec: mic-only is a supported mode,
 // summary is optional, cloud never nags).
 
+import { systemAudioReady } from "./systemAudio";
 import { copilotReady } from "./copilot";
 import { ipc, type TranscribeProvider } from "./ipc";
 import { KEY_PROVIDERS } from "./providers";
@@ -46,7 +47,7 @@ export type SttStatus = {
 export type SetupStatus = {
   micGranted: boolean;
   // Informational — never gates. (mic-only / in-person is a supported mode.)
-  screenGranted: boolean;
+  systemAudioReady: boolean;
   stt: SttStatus;
   // Informational — never gates. (summaries are optional.)
   summaryConfigured: boolean;
@@ -79,7 +80,7 @@ export async function computeSetupStatus(): Promise<SetupStatus> {
   ]);
 
   const micGranted = perm?.microphone === "granted";
-  const screenGranted = perm?.screen === "granted" || perm?.screen === "not_required";
+  const audioReady = perm ? systemAudioReady(perm) : false;
 
   // ---- STT working? -------------------------------------------------------
   // Default config drives it. Local → the model file must be downloaded.
@@ -148,7 +149,7 @@ export async function computeSetupStatus(): Promise<SetupStatus> {
   // ---- Cloud workspace (informational) ------------------------------------
   return {
     micGranted,
-    screenGranted,
+    systemAudioReady: audioReady,
     stt,
     summaryConfigured,
     summaryProvider: summaryProvider ?? "openai",

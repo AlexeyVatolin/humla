@@ -318,12 +318,12 @@ impl ChatAdapter for CustomChatAdapter {
 /// GitHub Copilot through its CLI. One adapter serves one turn, and the turn's
 /// steps share a session (`copilot::session::ChatTurnSession`).
 pub struct CopilotChatAdapter {
-    client: github_copilot_sdk::Client,
+    client: copilot_sdk::Client,
     turn: crate::copilot::session::ChatTurnSession,
 }
 
 impl CopilotChatAdapter {
-    pub fn new(client: github_copilot_sdk::Client) -> Self {
+    pub fn new(client: copilot_sdk::Client) -> Self {
         Self { client, turn: Default::default() }
     }
 }
@@ -354,8 +354,8 @@ impl ChatAdapter for CopilotChatAdapter {
     }
 }
 
-/// Anthropic's Messages API. The base URL is a constructor argument so tests
-/// can point one at a loopback server; production always uses the cloud base.
+/// Anthropic's Messages API. Tests point one at a loopback server through
+/// `with_base`; production always uses the cloud base.
 pub struct AnthropicChatAdapter {
     base_url: String,
 }
@@ -365,6 +365,7 @@ impl AnthropicChatAdapter {
         Self { base_url: crate::anthropic::BASE.to_string() }
     }
 
+    #[cfg(test)]
     pub fn with_base(base_url: impl Into<String>) -> Self {
         Self { base_url: base_url.into() }
     }
@@ -618,8 +619,8 @@ mod local_compat_tests {
             cancel: &cancel,
         };
         let tools = [ToolSpec {
-            name: "search_notes".into(),
-            description: "search".into(),
+            name: "search_notes",
+            description: "search",
             parameters: json!({"type": "object", "properties": {}}),
         }];
         let mut calls = Vec::new();

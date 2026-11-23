@@ -119,7 +119,7 @@ export function DoneStep({ ctx }: { ctx: StepContext }) {
     <StepShell
       icon={<Check size={26} strokeWidth={1.9} />}
       title="You're all set"
-      subtitle="Here's how Humla is configured. Anything can be changed later in Settings — click a row to adjust it now."
+      subtitle="Click a row to change it."
     >
       <div className="w-full max-w-md flex flex-col gap-2 text-left">
         {/* Microphone — required; the only row that reads as a gap when unmet. */}
@@ -144,11 +144,11 @@ export function DoneStep({ ctx }: { ctx: StepContext }) {
           value={
             s == null
               ? "Checking…"
-              : s.screenGranted
+              : s.systemAudioReady
                 ? (isWindows ? "Available" : "Granted")
                 : "Skipped — in-person only"
           }
-          tone={s == null ? "muted" : s.screenGranted ? "ok" : "muted"}
+          tone={s == null ? "muted" : s.systemAudioReady ? "ok" : "muted"}
           onClick={() => ctx.goTo("permissions")}
         />
 

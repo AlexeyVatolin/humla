@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 
 pub const BASE: &str = "https://api.openai.com/v1";
 
@@ -21,7 +20,7 @@ pub(crate) fn error_chain(err: &(dyn std::error::Error + 'static)) -> String {
 }
 
 pub fn client() -> reqwest::Client {
-    reqwest::Client::builder()
+    crate::http::client_builder()
         .timeout(std::time::Duration::from_secs(120))
         .build()
         .expect("reqwest client")
@@ -33,7 +32,7 @@ pub fn client() -> reqwest::Client {
 // complete, while still surfacing a wedged server as an error rather than
 // hanging the UI indefinitely.
 fn local_client() -> reqwest::Client {
-    reqwest::Client::builder()
+    crate::http::client_builder()
         .timeout(std::time::Duration::from_secs(600))
         .build()
         .expect("reqwest client")
@@ -44,7 +43,7 @@ fn local_client() -> reqwest::Client {
 // transcript through a reasoning model can legitimately need 2–3 minutes,
 // and the default 120s timeout was tripping on those.
 fn summary_cloud_client() -> reqwest::Client {
-    reqwest::Client::builder()
+    crate::http::client_builder()
         .timeout(std::time::Duration::from_secs(300))
         .build()
         .expect("reqwest client")
@@ -94,143 +93,6 @@ where
                     .await;
             }
         }
-    }
-}
-
-pub async fn ping(api_key: &str) -> Result<bool> {
-    let r = client()
-        .get(format!("{BASE}/models"))
-        .bearer_auth(api_key)
-        .send()
-        .await?;
-    Ok(r.status().is_success())
-}
-
-#[derive(Deserialize)]
-struct TranscribeResponse {
-    text: String,
-}
-
-#[derive(Deserialize)]
-struct VerboseTranscribeResponse {
-    text: String,
-    #[serde(default)]
-    words: Vec<VerboseWord>,
-}
-
-#[derive(Deserialize)]
-struct VerboseWord {
-    word: String,
-    start: f64,
-    end: f64,
-}
-
-/// One word's display text + chunk-relative ms bounds. Mirrors the local-
-/// Whisper `Word` type so callers can plumb either provider's output through
-/// the same downstream path. Empty for OpenAI models that don't return
-/// word-level timing.
-#[derive(Clone, Debug, Default)]
-pub struct TranscribeWord {
-    pub text: String,
-    pub start_ms: u64,
-    pub end_ms: u64,
-}
-
-/// True iff the OpenAI transcribe model returns word-level timestamps when
-/// asked for `verbose_json` + `timestamp_granularities[]=word`. Only the
-/// classic `whisper-1` endpoint supports that combination — the gpt-4o
-/// transcribe family rejects `verbose_json` outright, and the `-diarize`
-/// variant has its own segment-shaped response. Gating here keeps the cloud
-/// path single-codepath while still extracting word timings when the model
-/// is capable of producing them.
-fn supports_verbose_words(model: &str) -> bool {
-    model == "whisper-1"
-}
-
-pub async fn transcribe_file(
-    api_key: &str,
-    model: &str,
-    language: Option<&str>,
-    prompt: Option<&str>,
-    audio_path: &Path,
-) -> Result<(String, Vec<TranscribeWord>)> {
-    let bytes = tokio::fs::read(audio_path).await?;
-    let file_name = audio_path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("chunk.wav")
-        .to_string();
-    let part = reqwest::multipart::Part::bytes(bytes)
-        .file_name(file_name)
-        .mime_str("audio/wav")?;
-
-    let want_words = supports_verbose_words(model);
-    let response_format = if want_words { "verbose_json" } else { "json" };
-
-    let mut form = reqwest::multipart::Form::new()
-        .part("file", part)
-        .text("model", model.to_string())
-        .text("response_format", response_format.to_string())
-        // Force deterministic decoding so Whisper doesn't hallucinate filler
-        // phrases and silently drift to a different language on short audio.
-        .text("temperature", "0".to_string());
-    if want_words {
-        // The API expects an array — multipart `timestamp_granularities[]`
-        // is the documented name for the per-element field. Word grain
-        // alone is enough; segment grain comes back implicitly.
-        form = form.text("timestamp_granularities[]", "word".to_string());
-    }
-    if let Some(l) = language {
-        if l != "auto" {
-            form = form.text("language", l.to_string());
-        }
-    }
-    // Per OpenAI docs, gpt-4o-transcribe-diarize does not accept prompt.
-    if let Some(p) = prompt {
-        if !p.is_empty() && model != "gpt-4o-transcribe-diarize" {
-            form = form.text("prompt", p.to_string());
-        }
-    }
-
-    let r = client()
-        .post(format!("{BASE}/audio/transcriptions"))
-        .bearer_auth(api_key)
-        .multipart(form)
-        .send()
-        .await?;
-
-    if !r.status().is_success() {
-        let s = r.status();
-        let body = r.text().await.unwrap_or_default();
-        return Err(anyhow!("OpenAI {s}: {body}"));
-    }
-
-    if want_words {
-        let body: VerboseTranscribeResponse = r.json().await?;
-        let words = body
-            .words
-            .into_iter()
-            .filter_map(|w| {
-                let text = w.word.trim().to_string();
-                if text.is_empty() {
-                    return None;
-                }
-                // OpenAI returns float seconds; clamp negatives to 0 and saturate
-                // on overflow. Anything > u64::MAX ms is six hundred million
-                // years of audio so the floor is fine.
-                let start_ms = (w.start.max(0.0) * 1000.0).round() as u64;
-                let end_ms = (w.end.max(0.0) * 1000.0).round() as u64;
-                Some(TranscribeWord {
-                    text,
-                    start_ms,
-                    end_ms: end_ms.max(start_ms),
-                })
-            })
-            .collect();
-        Ok((body.text, words))
-    } else {
-        let body: TranscribeResponse = r.json().await?;
-        Ok((body.text, Vec::new()))
     }
 }
 
@@ -466,55 +328,6 @@ where
         parser.push(&bytes, &mut on_delta);
     }
     Ok(parser.answer)
-}
-
-/// Stream a multi-turn chat completion from cloud OpenAI. `on_delta` fires
-/// once per content delta; the full assembled answer is returned.
-pub(crate) async fn openai_chat_stream<F>(
-    base_url: &str,
-    api_key: &str,
-    model: &str,
-    messages: &[(&str, &str)],
-    on_delta: F,
-) -> Result<String>
-where
-    F: FnMut(&str) + Send,
-{
-    let req = ChatStreamRequest {
-        model,
-        messages: messages
-            .iter()
-            .map(|(role, content)| ChatMessage { role, content })
-            .collect(),
-        stream: true,
-        // Reasoning models (gpt-5 and later / o-series) reject a custom temperature.
-        temperature: if is_reasoning_model(model) { None } else { Some(0.3) },
-    };
-    // Shares `post_chat` with the summary path, so chat inherits its retry on
-    // transient send failures — the half-closed-pooled-connection case hits a
-    // chat turn exactly as readily as a summary.
-    let ep = Endpoint::from_base(base_url);
-    let started = std::time::Instant::now();
-    let r = post_chat(&ep, api_key, &req, started).await?;
-    let answer = consume_chat_sse(&ep, r, on_delta).await?;
-    eprintln!(
-        "[llm] openai chat stream done in {:?}, {} chars",
-        started.elapsed(),
-        answer.len()
-    );
-    if answer.trim().is_empty() {
-        return Err(anyhow!("{model} returned an empty response"));
-    }
-    Ok(answer)
-}
-
-pub async fn summarize(
-    api_key: &str,
-    model: &str,
-    system_prompt: &str,
-    transcript: &str,
-) -> Result<String> {
-    summarize_with_base(BASE, api_key, model, false, system_prompt, transcript, |_| {}).await
 }
 
 /// Which `/chat/completions` endpoint a call is talking to.
@@ -887,7 +700,7 @@ where
             eprintln!(
                 "[llm] could not parse response as ChatResponse: {e}\n\
                  [llm] body (first 500 chars): {}",
-                &body_text.chars().take(500).collect::<String>()
+                body_text.chars().take(500).collect::<String>()
             );
             return Err(anyhow!("unexpected response shape from {base_url}: {e}"));
         }

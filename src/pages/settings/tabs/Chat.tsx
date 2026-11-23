@@ -105,7 +105,7 @@ export function ChatTab({ s, update }: Pick<SettingsHook, "s" | "update">) {
     <Section title="AI Chat">
       <Row
         label="Provider"
-        description="Ask questions grounded in your notes. Cloud providers use your key or, for GitHub Copilot, your Copilot subscription; Local runs fully offline against Ollama or any OpenAI-compatible server. Independent of your transcription and summary providers."
+        description="Local keeps your notes on your Mac. The others send them to the provider."
         control={
           <Select
             value={s.chat_provider}
@@ -126,7 +126,6 @@ export function ChatTab({ s, update }: Pick<SettingsHook, "s" | "update">) {
         <>
           <Row
             label="Model"
-            description="Claude models. Tool-calling is handled automatically."
             control={
               <Select
                 value={s.chat_model}
@@ -139,12 +138,11 @@ export function ChatTab({ s, update }: Pick<SettingsHook, "s" | "update">) {
               />
             }
           />
-          <ProviderKeyCard provider="anthropic" description="Used for chat over your notes." />
+          <ProviderKeyCard provider="anthropic" />
           {/* Anthropic serves no embeddings endpoint, so retrieval here is the
               keyword half only. */}
           <p className="text-xs text-[var(--color-text-muted)] py-3">
-            Anthropic has no embedding model, so chat searches your notes by keyword rather than
-            by meaning. Cloud (OpenAI) or a local server give semantic search as well.
+            Keyword search only.
           </p>
         </>
       )}
@@ -155,11 +153,10 @@ export function ChatTab({ s, update }: Pick<SettingsHook, "s" | "update">) {
             copilot={copilot}
             model={s.copilot_chat_model}
             onModelChange={(v) => update("copilot_chat_model", v)}
-            modelDescription="Used for chat over your notes. Auto lets Copilot pick."
+            modelDescription=""
           />
           <p className="text-xs text-[var(--color-text-muted)] py-3">
-            GitHub Copilot has no embedding model here, so chat searches your notes by keyword
-            rather than by meaning. Cloud (OpenAI) or a local server give semantic search as well.
+            Keyword search only.
           </p>
         </>
       )}
@@ -174,12 +171,10 @@ export function ChatTab({ s, update }: Pick<SettingsHook, "s" | "update">) {
           <CustomModelField
             value={s.custom_chat_model}
             onChange={(v) => update("custom_chat_model", v)}
-            description="Used for chat over your notes. It has to support tool calling, which is how chat searches your notes."
+            description="Must support tool calling."
           />
           <p className="text-xs text-[var(--color-text-muted)] py-3">
-            Many endpoints serve no embedding model, so chat on a custom endpoint searches your
-            notes by keyword rather than by meaning. Cloud (OpenAI) or a local server give semantic
-            search as well.
+            Keyword search only.
           </p>
         </>
       )}
@@ -188,7 +183,6 @@ export function ChatTab({ s, update }: Pick<SettingsHook, "s" | "update">) {
         <>
           <Row
             label="Model"
-            description="A GPT-5-class model. Reasoning and tool-calling are handled automatically."
             control={
               <Select
                 value={s.chat_model}
@@ -199,7 +193,7 @@ export function ChatTab({ s, update }: Pick<SettingsHook, "s" | "update">) {
           />
           <ProviderKeyCard
             provider="openai"
-            description="Reused across cloud transcription, summaries, and chat — one key."
+            description="Shared with transcription and summaries."
           />
         </>
       )}
@@ -239,8 +233,8 @@ export function ChatTab({ s, update }: Pick<SettingsHook, "s" | "update">) {
               /v1/embeddings at all, and llama-server wants its own process. */}
           <div className="py-3 space-y-3 border-t border-[var(--color-line)]">
             <p className="text-xs text-[var(--color-text-muted)]">
-              Semantic search finds answers by meaning, not just keywords. It needs an embedding
-              model; leave these blank to use {EMBEDDING_OLLAMA_MODEL} on the chat server above.
+              Semantic search finds answers by meaning, yielding much better results when searching. It
+              needs an embedding model.
             </p>
             <Row
               label="Embedding server"
@@ -369,8 +363,8 @@ function EmbedCorpusLine({ model }: { model: string }) {
   return (
     <div className="space-y-2">
       <p className="text-xs text-[var(--color-warning-text)]">
-        {pending} note{s(pending)} {pending === 1 ? "has" : "have"} no embedding under {model} yet
-        — chat finds {pending === 1 ? "it" : "them"} by keyword only until then.
+        {pending} note{s(pending)} {pending === 1 ? "isn’t" : "aren’t"} embedded with {model} yet. Chat
+        finds {pending === 1 ? "it" : "them"} by keyword only until then.
       </p>
       <button className="nd-btn" onClick={() => void embedNow()} disabled={running}>
         {running ? "Embedding…" : "Embed now"}
@@ -431,17 +425,14 @@ function RebuildIndexRow() {
           {/* `--color-warning-text` (not `--color-warning`) — the readable variant, per
               globals.css: raw warning gold doesn't clear AAA as body text. */}
           <p className="text-xs text-[var(--color-warning-text)]">
-            {stale.count} recording{s(stale.count)} {stale.count === 1 ? "was" : "were"} indexed
-            before the latest improvements — chat can't tell who spoke in{" "}
-            {stale.count === 1 ? "it" : "them"}, and its excerpts may cut mid-sentence.
+            {stale.count} recording{s(stale.count)} {stale.count === 1 ? "uses" : "use"} an older
+            index. Chat can't tell who spoke in {stale.count === 1 ? "it" : "them"}.
           </p>
           <button className="nd-btn mt-2" onClick={() => void rebuild()} disabled={running}>
             {running ? "Rebuilding…" : "Rebuild now"}
           </button>
           <p className="text-xs text-[var(--color-text-muted)] mt-1">
-            Re-reads your whole library and re-embeds anything that changed, which uses your
-            configured key — a few cents at most. Only affects what chat can find; your notes
-            aren't changed.
+            Uses your key, a few cents at most. Notes aren't changed.
           </p>
         </>
       )}
